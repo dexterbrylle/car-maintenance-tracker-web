@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mazda CX-5 2016 Maintenance Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .car-info {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .completed {
+            background-color: #d5f4e6;
+            color: #27ae60;
+        }
+        .due-soon {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .overdue {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+        }
+        th {
+            background-color: #34495e;
+            color: white;
+            font-weight: bold;
+        }
+        .maintenance-item {
+            text-align: left;
+            font-weight: bold;
+            background-color: #f8f9fa;
+        }
+        .category-header {
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+        }
+        .notes {
+            background-color: #e8f4fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .legend {
+            margin-top: 15px;
+            font-size: 12px;
+        }
+        .legend span {
+            display: inline-block;
+            padding: 3px 8px;
+            margin-right: 10px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mazda CX-5 2016 Maintenance Tracker</h1>
+
+        <div class="car-info">
+            <strong>Current Status:</strong><br>
+            Purchase Date: July 5, 2025 | Purchase Mileage: 52,666 km<br>
+            Current Mileage: 54,770.9 km (as of September 8, 2025)<br>
+            <strong>Next Major Service:</strong> 56,000 km (approximately 1,229 km away)
+        </div>
+
+        <div class="legend">
+            <strong>Legend:</strong>
+            <span class="completed">✓ Completed</span>
+            <span class="due-soon">⚠ Due Soon</span>
+            <span class="overdue">⚡ Overdue</span>
+            R = Replace | I = Inspect
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th rowspan="2">Maintenance Item</th>
+                    <th colspan="12">Maintenance Intervals (x1000 km)</th>
+                </tr>
+                <tr>
+                    <th>8</th><th>16</th><th>24</th><th>32</th><th>40</th><th>48</th><th>56</th><th>64</th><th>72</th><th>80</th><th>88</th><th>96</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="category-header">
+                    <td colspan="13">ENGINE</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Drive belts</td>
+                    <td></td><td></td><td></td><td></td><td></td><td></td><td>I</td><td></td><td></td><td></td><td></td><td></td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Engine oil & filter</td>
+                    <td class="completed">R ✓</td><td>R</td><td>R</td><td>R</td><td>R</td><td class="completed">R ✓</td><td>R</td><td>R</td><td>R</td><td>R</td><td>R</td><td>R</td>
+                </tr>
+
+                <tr class="category-header">
+                    <td colspan="13">COOLING SYSTEM</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Engine coolant</td>
+                    <td colspan="12">Replace at first 192,000 km (120,000 miles) or 10 years; after that, every 96,000 km (60,000 miles) or 5 years</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Engine coolant level</td>
+                    <td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td>
+                </tr>
+
+                <tr class="category-header">
+                    <td colspan="13">FUEL SYSTEM</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Air filter</td>
+                    <td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td class="completed">R ✓</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Fuel lines and hoses</td>
+                    <td></td><td></td><td></td><td></td><td>I</td><td></td><td></td><td></td><td></td><td></td><td></td><td>I</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Hoses and tubes for emission</td>
+                    <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>I</td>
+                </tr>
+
+                <tr class="category-header">
+                    <td colspan="13">IGNITION SYSTEM</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Spark plugs</td>
+                    <td colspan="12">Replace every 120,000 km (75,000 miles)</td>
+                </tr>
+
+                <tr class="category-header">
+                    <td colspan="13">ELECTRICAL SYSTEM</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Function of all lights</td>
+                    <td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td>
+                </tr>
+
+                <tr class="category-header">
+                    <td colspan="13">CHASSIS and BODY</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Brake lines, hoses and connections</td>
+                    <td></td><td></td><td></td><td></td><td>I</td><td></td><td></td><td></td><td></td><td></td><td></td><td>I</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Brake and clutch fluid level</td>
+                    <td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td class="completed">I ✓</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Disc brakes</td>
+                    <td></td><td>I</td><td></td><td>I</td><td></td><td>I</td><td></td><td>I</td><td></td><td>I</td><td></td><td>I</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Tire (Rotation)</td>
+                    <td colspan="12">Rotate every 8,000 km (5,000 miles)</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Tire inflation pressure and tire wear</td>
+                    <td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Steering operation and linkages</td>
+                    <td></td><td></td><td></td><td></td><td></td><td></td><td>I</td><td></td><td></td><td></td><td></td><td>I</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Front and rear suspension, ball joints and wheel bearing axial play</td>
+                    <td></td><td></td><td></td><td></td><td>I</td><td></td><td></td><td></td><td></td><td></td><td></td><td>I</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Rear differential oil</td>
+                    <td colspan="12">*4*5</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Transfer oil</td>
+                    <td colspan="12">*5</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Driveshaft dust boots</td>
+                    <td></td><td></td><td></td><td></td><td>I</td><td></td><td></td><td></td><td></td><td></td><td></td><td>I</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Bolts and nuts on chassis and body</td>
+                    <td></td><td></td><td></td><td></td><td></td><td></td><td>T</td><td></td><td></td><td></td><td></td><td>T</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Exhaust system and heat shields</td>
+                    <td colspan="12">Inspect every 72,000 km (45,000 miles) or 5 years</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">All locks and hinges</td>
+                    <td>L</td><td>L</td><td>L</td><td>L</td><td>L</td><td>L</td><td>L</td><td>L</td><td>L</td><td>L</td><td>L</td><td>L</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Washer fluid level</td>
+                    <td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td><td>I</td>
+                </tr>
+
+                <tr class="category-header">
+                    <td colspan="13">AIR CONDITIONER SYSTEM</td>
+                </tr>
+                <tr>
+                    <td class="maintenance-item">Cabin air filter</td>
+                    <td colspan="12" class="completed">Replace every 40,000 km (25,000 miles) or 2 years ✓</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="notes">
+            <h3>Completed Maintenance:</h3>
+            <ul>
+                <li><strong>July 12, 2025 (52,800 km):</strong> Engine Oil & Filter Change + Brake Fluid Change (DOT 4)</li>
+                <li><strong>September 8, 2025 (54,770.9 km):</strong> Air Filter Change + Cabin Air Filter Change</li>
+            </ul>
+
+            <h3>Upcoming Maintenance (Based on 56,000 km service):</h3>
+            <ul>
+                <li>Engine Oil & Filter Change</li>
+                <li>Inspect Engine Coolant Level</li>
+                <li>Inspect Function of All Lights</li>
+                <li>Inspect Brake and Clutch Fluid Level</li>
+                <li>Inspect Tire Inflation Pressure and Wear</li>
+                <li>Inspect Steering Operation and Linkages</li>
+                <li>Lubricate All Locks and Hinges</li>
+                <li>Inspect Washer Fluid Level</li>
+                <li>Inspect Drive Belts</li>
+                <li>Tighten Bolts and Nuts on Chassis and Body</li>
+            </ul>
+
+            <h3>Important Notes:</h3>
+            <ul>
+                <li><strong>Tire Rotation:</strong> Should be done every 8,000 km. Your last rotation status is unknown - consider doing this at your next service.</li>
+                <li><strong>Oil Changes:</strong> Based on the schedule, oil should be changed every 8,000 km. Your next oil change is due at 56,000 km.</li>
+                <li><strong>Cabin Air Filter:</strong> You've recently replaced this (September 2025), so you're good for 2 years or 40,000 km.</li>
+                <li><strong>Spark Plugs:</strong> Due at 120,000 km (not for a while yet).</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
