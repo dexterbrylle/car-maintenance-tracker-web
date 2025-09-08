@@ -115,7 +115,7 @@ export function ServiceHistory() {
       // Update vehicle mileage if the new mileage is higher
       try {
         const vehiclesResponse = await api.getVehicles()
-        const currentVehicle = vehiclesResponse.data.find(v => v._id === selectedVehicleId)
+        const currentVehicle = vehiclesResponse.data.find((v: any) => v._id === selectedVehicleId)
         if (currentVehicle && newMileage > currentVehicle.current_mileage) {
           await api.updateVehicle(selectedVehicleId, { current_mileage: newMileage })
         }

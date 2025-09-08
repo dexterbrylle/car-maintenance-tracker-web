@@ -91,7 +91,7 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
       // Update vehicle mileage if the new mileage is higher
       try {
         const vehiclesResponse = await api.getVehicles()
-        const currentVehicle = vehiclesResponse.data.find(v => v._id === vehicleId)
+        const currentVehicle = vehiclesResponse.data.find((v: any) => v._id === vehicleId)
         if (currentVehicle && newMileage > currentVehicle.current_mileage) {
           await api.updateVehicle(vehicleId, { current_mileage: newMileage })
         }
