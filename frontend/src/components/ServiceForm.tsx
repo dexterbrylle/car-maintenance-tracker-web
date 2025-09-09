@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { MaintenanceItem } from "@/types"
 import { useState } from "react"
 import { api } from "@/lib/api"
-import { Settings } from "lucide-react"
+import { Settings, Search } from "lucide-react"
 
 interface ServiceFormProps {
   vehicleId: string
@@ -25,9 +25,17 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [itemCosts, setItemCosts] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
 
-  // Group maintenance items by category
-  const groupedItems = maintenanceItems.reduce((acc, item) => {
+  // Filter and group maintenance items by category
+  const filteredItems = maintenanceItems.filter(item => 
+    !searchTerm || 
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
+
+  const groupedItems = filteredItems.reduce((acc, item) => {
     if (!acc[item.category]) {
       acc[item.category] = []
     }
@@ -65,6 +73,33 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
       ...prev,
       [itemId]: cost
     }))
+  }
+
+  const handleSelectAllInCategory = (category: string, items: MaintenanceItem[]) => {
+    const itemIds = items.map(item => item._id)
+    const allSelected = itemIds.every(id => selectedItems.includes(id))
+    
+    if (allSelected) {
+      // Deselect all items in this category
+      setSelectedItems(prev => prev.filter(id => !itemIds.includes(id)))
+      setItemCosts(prev => {
+        const newCosts = { ...prev }
+        itemIds.forEach(id => delete newCosts[id])
+        return newCosts
+      })
+    } else {
+      // Select all items in this category
+      setSelectedItems(prev => [...new Set([...prev, ...itemIds])])
+      setItemCosts(prev => {
+        const newCosts = { ...prev }
+        itemIds.forEach(id => {
+          if (!newCosts[id]) {
+            newCosts[id] = ""
+          }
+        })
+        return newCosts
+      })
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -131,16 +166,62 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Maintenance Items Selection */}
           <div className="space-y-4">
-            <Label className="text-base font-semibold">Maintenance Items Completed</Label>
-            <div className="space-y-4 max-h-64 overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Maintenance Items Completed</Label>
+              <div className="text-sm text-muted-foreground">
+                {selectedItems.length} selected
+              </div>
+            </div>
+            
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search maintenance items..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+
+            <div className="space-y-6 max-h-96 overflow-y-auto">
+              {Object.keys(groupedItems).length === 0 && searchTerm && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>No maintenance items found matching "{searchTerm}"</p>
+                  <Button 
+                    variant="link" 
+                    onClick={() => setSearchTerm("")}
+                    className="text-sm"
+                  >
+                    Clear search
+                  </Button>
+                </div>
+              )}
+              
               {Object.entries(groupedItems).map(([category, items]) => (
                 <div key={category} className="space-y-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between">
                     <Badge variant="secondary" className="text-xs">
                       {category}
                     </Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {items.length} item{items.length !== 1 ? 's' : ''}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSelectAllInCategory(category, items)}
+                        className="text-xs h-6 px-2"
+                      >
+                        {items.every(item => selectedItems.includes(item._id)) ? 'Deselect All' : 'Select All'}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 pl-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-2">
                     {items.map((item) => (
                       <div key={item._id} className="flex items-start space-x-2 p-2 rounded hover:bg-muted/50">
                         <Checkbox
@@ -161,7 +242,7 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
                           {selectedItems.includes(item._id) && (
                             <div className="mt-2">
                               <Label htmlFor={`cost-${item._id}`} className="text-xs text-muted-foreground">
-                                Cost
+                                Cost (PHP)
                               </Label>
                               <Input
                                 id={`cost-${item._id}`}
@@ -170,7 +251,8 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
                                 placeholder="0.00"
                                 value={itemCosts[item._id] || ""}
                                 onChange={(e) => handleItemCostChange(item._id, e.target.value)}
-                                className="w-24"
+                                className="w-full mt-1"
+                                size="sm"
                               />
                             </div>
                           )}

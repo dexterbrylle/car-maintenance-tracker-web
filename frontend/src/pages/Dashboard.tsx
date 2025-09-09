@@ -3,12 +3,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { VehicleSelector } from "@/components/VehicleSelector"
-import { MaintenanceCard } from "@/components/MaintenanceCard"
+import { MaintenanceStatusCard } from "@/components/MaintenanceStatusCard"
+import { MileageUpdateForm } from "@/components/MileageUpdateForm"
+import { QuickServiceModal } from "@/components/QuickServiceModal"
+import { useToast } from "@/components/ui/toast"
 import { ServiceForm } from "@/components/ServiceForm"
 import { ServiceScheduler } from "@/components/ServiceScheduler"
+import { MaintenanceInsights } from "@/components/MaintenanceInsights"
 import { Vehicle, DashboardData, MaintenanceItem, ServiceRecord } from "@/types"
 import { api } from "@/lib/api"
-import { Car, Plus, Calendar, Clock, AlertTriangle, CheckCircle, TrendingUp } from "lucide-react"
+import { Car, Plus, Calendar, Clock, AlertTriangle, CheckCircle, TrendingUp, Loader2 } from "lucide-react"
 
 export function Dashboard() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -17,8 +21,13 @@ export function Dashboard() {
   const [maintenanceItems, setMaintenanceItems] = useState<MaintenanceItem[]>([])
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [dashboardLoading, setDashboardLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [showScheduler, setShowScheduler] = useState(false)
+  const [selectedMaintenanceItem, setSelectedMaintenanceItem] = useState<MaintenanceItem | null>(null)
+  const [showQuickServiceModal, setShowQuickServiceModal] = useState(false)
+  const { addToast } = useToast()
 
   useEffect(() => {
     loadVehicles()
@@ -47,29 +56,36 @@ export function Dashboard() {
   }
 
   const loadDashboardData = async () => {
+    setDashboardLoading(true)
+    setError(null)
     try {
       const response = await api.getDashboard(selectedVehicleId)
       setDashboardData(response.data)
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
+      setError('Failed to load dashboard data')
+    } finally {
+      setDashboardLoading(false)
     }
   }
 
   const loadMaintenanceItems = async () => {
     try {
       const response = await api.getMaintenance(selectedVehicleId)
-      setMaintenanceItems(response.data)
+      setMaintenanceItems(Array.isArray(response.data) ? response.data : [])
     } catch (error) {
       console.error('Failed to load maintenance items:', error)
+      setMaintenanceItems([])
     }
   }
 
   const loadServiceRecords = async () => {
     try {
       const response = await api.getServices(selectedVehicleId)
-      setServiceRecords(response.data)
+      setServiceRecords(Array.isArray(response.data) ? response.data : [])
     } catch (error) {
       console.error('Failed to load service records:', error)
+      setServiceRecords([])
     }
   }
 
@@ -79,10 +95,79 @@ export function Dashboard() {
     setShowServiceForm(false)
   }
 
-  const selectedVehicle = vehicles.find(v => v._id === selectedVehicleId)
+  const handleMileageUpdate = (newMileage: number) => {
+    if (dashboardData) {
+      setDashboardData({
+        ...dashboardData,
+        vehicle: { ...dashboardData.vehicle, current_mileage: newMileage }
+      })
+    }
+    // Refresh dashboard data to recalculate due items
+    loadDashboardData()
+  }
+
+  const handleMarkComplete = async (itemId: string) => {
+    if (!dashboardData) return
+    
+    try {
+      await api.addService({
+        vehicle_id: selectedVehicleId,
+        maintenance_item_id: itemId,
+        date: new Date().toISOString().split('T')[0],
+        mileage: dashboardData.vehicle.current_mileage,
+        cost: 0,
+        notes: "Marked as complete from dashboard"
+      })
+      
+      handleServiceComplete()
+      
+      // Find the maintenance item to show in toast
+      const item = [...dashboardData.due_now, ...dashboardData.due_soon, ...dashboardData.ok]
+        .find(item => item.maintenance_item._id === itemId)
+      
+      addToast({
+        title: "Service marked complete",
+        description: item ? `${item.maintenance_item.name} marked as complete` : "Service marked as complete",
+        variant: "success"
+      })
+    } catch (error) {
+      console.error('Failed to mark service as complete:', error)
+      setError('Failed to mark service as complete')
+      addToast({
+        title: "Action failed",
+        description: "Failed to mark service as complete",
+        variant: "error"
+      })
+    }
+  }
+
+  const handleScheduleService = (itemId: string) => {
+    const item = [...dashboardData!.due_now, ...dashboardData!.due_soon, ...dashboardData!.ok]
+      .find(item => item.maintenance_item._id === itemId)
+    
+    if (item) {
+      setSelectedMaintenanceItem(item.maintenance_item)
+      setShowQuickServiceModal(true)
+    }
+  }
+
+  const handleQuickServiceComplete = () => {
+    setShowQuickServiceModal(false)
+    setSelectedMaintenanceItem(null)
+    handleServiceComplete()
+  }
+
+  const selectedVehicle = dashboardData?.vehicle || vehicles.find(v => v._id === selectedVehicleId)
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading dashboard...
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -131,9 +216,11 @@ export function Dashboard() {
                       <CardDescription>{selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold">
-                        {selectedVehicle.current_mileage.toLocaleString()} km
-                      </div>
+                      <MileageUpdateForm
+                        vehicleId={selectedVehicleId}
+                        currentMileage={selectedVehicle.current_mileage}
+                        onUpdate={handleMileageUpdate}
+                      />
                     </CardContent>
                   </Card>
                 )}
@@ -177,8 +264,18 @@ export function Dashboard() {
             <ServiceScheduler vehicleId={selectedVehicleId} />
           )}
 
-          {/* Overview Section */}
+          {/* Maintenance Insights Section */}
           {selectedVehicle && dashboardData && (
+            <MaintenanceInsights 
+              vehicle={selectedVehicle}
+              completedServices={serviceRecords.slice(0, 3)}
+              upcomingMaintenance={dashboardData.due_soon.map(item => item.maintenance_item)}
+              dueNowItems={dashboardData.due_now.map(item => item.maintenance_item)}
+            />
+          )}
+
+          {/* Overview Section */}
+          {selectedVehicle && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -190,59 +287,84 @@ export function Dashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-green-600">
-                      {dashboardData.ok.length}
+                {dashboardLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading maintenance data...
                     </div>
-                    <div className="text-sm text-green-700">Up to Date</div>
                   </div>
-                  <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                    <Clock className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-yellow-600">
-                      {dashboardData.due_soon.length}
+                ) : error ? (
+                  <div className="text-center py-8">
+                    <p className="text-red-500 mb-4">{error}</p>
+                    <Button onClick={loadDashboardData} variant="outline" size="sm">
+                      Try Again
+                    </Button>
+                  </div>
+                ) : dashboardData ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                        <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                        <div className="text-2xl font-bold text-green-600">
+                          {dashboardData.ok.length}
+                        </div>
+                        <div className="text-sm text-green-700">Up to Date</div>
+                      </div>
+                      <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <Clock className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
+                        <div className="text-2xl font-bold text-yellow-600">
+                          {dashboardData.due_soon.length}
+                        </div>
+                        <div className="text-sm text-yellow-700">Due Soon</div>
+                      </div>
+                      <div className="text-center p-4 bg-red-50 rounded-lg border border-red-200">
+                        <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
+                        <div className="text-2xl font-bold text-red-600">
+                          {dashboardData.due_now.length}
+                        </div>
+                        <div className="text-sm text-red-700">Due Now</div>
+                      </div>
+                      <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <Calendar className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                        <div className="text-2xl font-bold text-blue-600">
+                          {Array.isArray(serviceRecords) ? serviceRecords.length : 0}
+                        </div>
+                        <div className="text-sm text-blue-700">Services Logged</div>
+                      </div>
                     </div>
-                    <div className="text-sm text-yellow-700">Due Soon</div>
-                  </div>
-                  <div className="text-center p-4 bg-red-50 rounded-lg">
-                    <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-red-600">
-                      {dashboardData.due_now.length}
-                    </div>
-                    <div className="text-sm text-red-700">Due Now</div>
-                  </div>
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <Calendar className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-blue-600">
-                      {serviceRecords.length}
-                    </div>
-                    <div className="text-sm text-blue-700">Services Logged</div>
-                  </div>
-                </div>
 
-                {/* Recent Services */}
-                {serviceRecords.length > 0 && (
-                  <div className="mt-6">
-                    <h3 className="font-semibold mb-3">Recent Services</h3>
-                    <div className="space-y-2">
-                      {serviceRecords.slice(0, 3).map((service) => {
-                        const maintenanceItem = maintenanceItems.find(mi => mi._id === service.maintenance_item_id)
-                        return (
-                          <div key={service._id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                            <div>
-                              <div className="font-medium">{maintenanceItem?.name || 'Unknown Service'}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {new Date(service.date).toLocaleDateString()} • {service.mileage.toLocaleString()} km
+                    {/* Recent Services */}
+                    {Array.isArray(serviceRecords) && serviceRecords.length > 0 && (
+                      <div className="mt-6">
+                        <h3 className="font-semibold mb-3">Recent Services</h3>
+                        <div className="space-y-2">
+                          {serviceRecords.slice(0, 3).map((service) => {
+                            const maintenanceItem = Array.isArray(maintenanceItems) ? maintenanceItems.find(mi => mi._id === service.maintenance_item_id) : null
+                            return (
+                              <div key={service._id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                                <div>
+                                  <div className="font-medium">{maintenanceItem?.name || 'Unknown Service'}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {new Date(service.date).toLocaleDateString()} • {service.mileage.toLocaleString()} km
+                                  </div>
+                                </div>
+                                <Badge variant="outline">
+                                  ${service.cost.toFixed(2)}
+                                </Badge>
                               </div>
-                            </div>
-                            <Badge variant="outline">
-                              {service.cost.toFixed(2)}
-                            </Badge>
-                          </div>
-                        )
-                      })}
-                    </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground mb-4">No maintenance data available</p>
+                    <Button onClick={loadDashboardData} variant="outline" size="sm">
+                      Load Data
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -254,15 +376,20 @@ export function Dashboard() {
           <div className="space-y-6">
             {dashboardData.due_now.length > 0 && (
               <div>
-                <h2 className="text-xl font-semibold mb-4 text-red-600">Due Now</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  <h2 className="text-xl font-semibold text-red-600">
+                    DUE NOW ({dashboardData.due_now.length} {dashboardData.due_now.length === 1 ? 'item' : 'items'})
+                  </h2>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {dashboardData.due_now.map((item) => (
-                    <MaintenanceCard
-                      key={item._id}
+                    <MaintenanceStatusCard
+                      key={item.maintenance_item._id}
                       item={item}
                       status="due_now"
-                      vehicleId={selectedVehicleId}
-                      onServiceComplete={handleServiceComplete}
+                      onMarkComplete={handleMarkComplete}
+                      onScheduleService={handleScheduleService}
                     />
                   ))}
                 </div>
@@ -271,15 +398,20 @@ export function Dashboard() {
 
             {dashboardData.due_soon.length > 0 && (
               <div>
-                <h2 className="text-xl font-semibold mb-4 text-yellow-600">Due Soon</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <Clock className="w-5 h-5 text-yellow-600" />
+                  <h2 className="text-xl font-semibold text-yellow-600">
+                    DUE SOON ({dashboardData.due_soon.length} {dashboardData.due_soon.length === 1 ? 'item' : 'items'})
+                  </h2>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {dashboardData.due_soon.map((item) => (
-                    <MaintenanceCard
-                      key={item._id}
+                    <MaintenanceStatusCard
+                      key={item.maintenance_item._id}
                       item={item}
                       status="due_soon"
-                      vehicleId={selectedVehicleId}
-                      onServiceComplete={handleServiceComplete}
+                      onMarkComplete={handleMarkComplete}
+                      onScheduleService={handleScheduleService}
                     />
                   ))}
                 </div>
@@ -288,21 +420,50 @@ export function Dashboard() {
 
             {dashboardData.ok.length > 0 && (
               <div>
-                <h2 className="text-xl font-semibold mb-4 text-green-600">Up to Date</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <h2 className="text-xl font-semibold text-green-600">
+                    UP TO DATE ({dashboardData.ok.length}+ {dashboardData.ok.length === 1 ? 'item' : 'items'})
+                  </h2>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {dashboardData.ok.map((item) => (
-                    <MaintenanceCard
-                      key={item._id}
+                  {dashboardData.ok.slice(0, 6).map((item) => (
+                    <MaintenanceStatusCard
+                      key={item.maintenance_item._id}
                       item={item}
                       status="ok"
-                      vehicleId={selectedVehicleId}
-                      onServiceComplete={handleServiceComplete}
+                      onMarkComplete={handleMarkComplete}
+                      onScheduleService={handleScheduleService}
                     />
                   ))}
                 </div>
+                {dashboardData.ok.length > 6 && (
+                  <div className="text-center mt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowScheduler(!showScheduler)}
+                    >
+                      View All {dashboardData.ok.length} Items
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
+        )}
+
+        {/* Quick Service Modal */}
+        {selectedMaintenanceItem && selectedVehicle && (
+          <QuickServiceModal
+            isOpen={showQuickServiceModal}
+            onClose={() => {
+              setShowQuickServiceModal(false)
+              setSelectedMaintenanceItem(null)
+            }}
+            maintenanceItem={selectedMaintenanceItem}
+            vehicle={selectedVehicle}
+            onSuccess={handleQuickServiceComplete}
+          />
         )}
       </div>
     </div>

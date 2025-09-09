@@ -385,12 +385,13 @@ class MongoJSONEncoder(json.JSONEncoder):
 app.json_encoder = MongoJSONEncoder
 
 # Import routes
-from routes import vehicles, maintenance, services
+from routes import vehicles, maintenance, services, dashboard
 
 # Register blueprints
 app.register_blueprint(vehicles.bp, url_prefix='/api/vehicles')
 app.register_blueprint(maintenance.bp, url_prefix='/api/maintenance')
 app.register_blueprint(services.bp, url_prefix='/api/services')
+app.register_blueprint(dashboard.bp, url_prefix='/api/dashboard')
 
 @app.route('/health')
 def health_check():
@@ -401,73 +402,6 @@ def health_check():
     except Exception as e:
         return {'status': 'unhealthy', 'error': str(e)}, 500
 
-def serialize_dashboard_item(item):
-    """Convert MongoDB document to JSON-serializable format for dashboard"""
-    if item:
-        item['_id'] = str(item['_id'])
-        item['vehicle_id'] = str(item['vehicle_id'])
-        if 'created_at' in item and isinstance(item['created_at'], datetime):
-            item['created_at'] = item['created_at'].isoformat()
-    return item
-
-@app.route('/api/dashboard/<vehicle_id>')
-def get_dashboard(vehicle_id):
-    try:
-        # Get vehicle info
-        vehicle = db.vehicles.find_one({'_id': ObjectId(vehicle_id)})
-        if not vehicle:
-            return {'error': 'Vehicle not found'}, 404
-
-        current_mileage = vehicle.get('current_mileage', 0)
-
-        # Get all maintenance items for the vehicle
-        maintenance_items = list(db.maintenance_items.find({'vehicle_id': ObjectId(vehicle_id)}))
-
-        # Get service records to determine last service mileage for each item
-        service_records = list(db.service_records.find({'vehicle_id': ObjectId(vehicle_id)}))
-
-        # Calculate status for each maintenance item
-        dashboard_data = {
-            'due_now': [],
-            'due_soon': [],
-            'ok': []
-        }
-
-        for item in maintenance_items:
-            interval_km = item.get('interval_km', 0)
-
-            # Find the last service for this maintenance item
-            last_service = None
-            for service in sorted(service_records, key=lambda x: x.get('mileage', 0), reverse=True):
-                if service.get('maintenance_item_id') == item['_id']:
-                    last_service = service
-                    break
-
-            if last_service:
-                last_service_mileage = last_service.get('mileage', 0)
-            else:
-                last_service_mileage = 0
-
-            # Calculate due status
-            due_mileage = last_service_mileage + interval_km
-            soon_mileage = due_mileage - 1000  # 1000km warning
-
-            if current_mileage >= due_mileage:
-                dashboard_data['due_now'].append(item)
-            elif current_mileage >= soon_mileage:
-                dashboard_data['due_soon'].append(item)
-            else:
-                dashboard_data['ok'].append(item)
-
-        # Serialize all items in the dashboard data
-        dashboard_data['due_now'] = [serialize_dashboard_item(item) for item in dashboard_data['due_now']]
-        dashboard_data['due_soon'] = [serialize_dashboard_item(item) for item in dashboard_data['due_soon']]
-        dashboard_data['ok'] = [serialize_dashboard_item(item) for item in dashboard_data['ok']]
-
-        return dashboard_data, 200
-
-    except Exception as e:
-        return {'error': str(e)}, 500
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5005))

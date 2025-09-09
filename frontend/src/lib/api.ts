@@ -3,7 +3,7 @@ import { Vehicle, MaintenanceItem, ServiceRecord, DashboardData } from '../types
 
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD 
   ? '/api'  // Production: proxy through nginx
-  : 'http://localhost:5000/api');  // Development
+  : 'http://localhost:3001/api');  // Development
 
 export const api = {
   // Vehicles
@@ -11,6 +11,8 @@ export const api = {
   addVehicle: (data: Partial<Vehicle>) => axios.post<{ id: string; message: string }>(`${API_BASE}/vehicles`, data),
   updateVehicle: (id: string, data: Partial<Vehicle>) =>
     axios.put<{ message: string }>(`${API_BASE}/vehicles/${id}`, data),
+  updateVehicleMileage: (id: string, mileage: number) =>
+    axios.patch<{ message: string; current_mileage: number }>(`${API_BASE}/vehicles/${id}/mileage`, { current_mileage: mileage }),
   deleteVehicle: (id: string) =>
     axios.delete<{ message: string }>(`${API_BASE}/vehicles/${id}`),
 
@@ -20,7 +22,7 @@ export const api = {
 
   // Maintenance
   getMaintenance: (vehicleId: string) =>
-    axios.get<MaintenanceItem[]>(`${API_BASE}/maintenance/${vehicleId}`),
+    axios.get<MaintenanceItem[]>(`${API_BASE}/maintenance/simple/${vehicleId}`),
   addMaintenanceItem: (data: Partial<MaintenanceItem>) =>
     axios.post<{ id: string; message: string }>(`${API_BASE}/maintenance`, data),
 
@@ -36,4 +38,12 @@ export const api = {
 
   // Health check
   healthCheck: () => axios.get<{ status: string; database?: string }>(`${API_BASE}/health`),
+  
+  // Export
+  exportServiceHistory: (vehicleId: string) =>
+    axios.get(`${API_BASE}/services/export/${vehicleId}`, { responseType: 'blob' }),
+  
+  // Maintenance Schedule
+  getMaintenanceSchedule: (vehicleId: string) =>
+    axios.get(`${API_BASE}/maintenance/${vehicleId}`),
 };

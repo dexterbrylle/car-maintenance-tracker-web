@@ -6,19 +6,23 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { VehicleSelector } from "@/components/VehicleSelector"
 import { ServiceForm } from "@/components/ServiceForm"
+import { useToast } from "@/components/ui/toast"
 import { Vehicle, ServiceRecord, MaintenanceItem } from "@/types"
 import { api } from "@/lib/api"
-import { History, Calendar, Gauge, Edit, Save, X, Trash2 } from "lucide-react"
+import { History, Calendar, Gauge, Edit, Save, X, Trash2, Download, Search } from "lucide-react"
 
 export function ServiceHistory() {
+  const { addToast } = useToast()
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("")
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([])
   const [maintenanceItems, setMaintenanceItems] = useState<MaintenanceItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [filterType, setFilterType] = useState<string>("all")
   const [dateFilter, setDateFilter] = useState<string>("")
+  const [searchTerm, setSearchTerm] = useState<string>("")
   const [editingRecord, setEditingRecord] = useState<ServiceRecord | null>(null)
   const [editForm, setEditForm] = useState({
     date: "",
@@ -48,6 +52,11 @@ export function ServiceHistory() {
       }
     } catch (error) {
       console.error('Failed to load vehicles:', error)
+      addToast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to load vehicles"
+      })
     } finally {
       setLoading(false)
     }
@@ -59,6 +68,11 @@ export function ServiceHistory() {
       setServiceRecords(response.data)
     } catch (error) {
       console.error('Failed to load service records:', error)
+      addToast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to load service records"
+      })
     }
   }
 
@@ -68,12 +82,68 @@ export function ServiceHistory() {
       setMaintenanceItems(response.data)
     } catch (error) {
       console.error('Failed to load maintenance items:', error)
+      addToast({
+        variant: "error",
+        title: "Error",
+        description: "Failed to load maintenance items"
+      })
+    }
+  }
+
+  const exportServiceHistory = async () => {
+    if (!selectedVehicleId) return
+    
+    setExporting(true)
+    try {
+      const response = await api.exportServiceHistory(selectedVehicleId)
+      
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'text/csv' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      
+      // Extract filename from response headers or create default
+      const contentDisposition = response.headers['content-disposition']
+      let filename = 'service-history.csv'
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      }
+      
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      addToast({
+        variant: "success",
+        title: "Export Complete",
+        description: "Service history exported successfully"
+      })
+    } catch (error) {
+      console.error('Failed to export service history:', error)
+      addToast({
+        variant: "error",
+        title: "Export Failed",
+        description: "Failed to export service history"
+      })
+    } finally {
+      setExporting(false)
     }
   }
 
   const handleServiceComplete = () => {
     loadServiceRecords()
     setShowServiceForm(false)
+    addToast({
+      variant: "success",
+      title: "Service Logged",
+      description: "Service record has been added successfully"
+    })
   }
 
   const startEditing = (record: ServiceRecord) => {
@@ -126,8 +196,18 @@ export function ServiceHistory() {
       await loadServiceRecords()
       await loadVehicles() // Refresh vehicles data to update mileage display
       cancelEditing()
+      addToast({
+        variant: "success",
+        title: "Record Updated",
+        description: "Service record has been updated successfully"
+      })
     } catch (error) {
       console.error('Failed to update service record:', error)
+      addToast({
+        variant: "error",
+        title: "Update Failed",
+        description: "Failed to update service record"
+      })
     }
   }
 
@@ -139,8 +219,18 @@ export function ServiceHistory() {
     try {
       await api.deleteService(recordId)
       await loadServiceRecords()
+      addToast({
+        variant: "success",
+        title: "Record Deleted",
+        description: "Service record has been deleted successfully"
+      })
     } catch (error) {
       console.error('Failed to delete service record:', error)
+      addToast({
+        variant: "error",
+        title: "Delete Failed",
+        description: "Failed to delete service record"
+      })
     }
   }
 
@@ -152,7 +242,10 @@ export function ServiceHistory() {
   const filteredRecords = serviceRecords.filter(record => {
     const matchesType = filterType === "all" || record.maintenance_item_id === filterType
     const matchesDate = !dateFilter || record.date.startsWith(dateFilter)
-    return matchesType && matchesDate
+    const matchesSearch = !searchTerm || 
+      getMaintenanceItemName(record.maintenance_item_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (record.notes && record.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+    return matchesType && matchesDate && matchesSearch
   })
 
   const totalCost = serviceRecords.reduce((sum, record) => sum + record.cost, 0)
@@ -260,6 +353,36 @@ export function ServiceHistory() {
                             onChange={(e) => setDateFilter(e.target.value)}
                             placeholder="Filter by date"
                           />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium">Search</label>
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                              type="text"
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              placeholder="Search services or notes"
+                              className="pl-8"
+                            />
+                          </div>
+                        </div>
+                        <div className="pt-2">
+                          <Button
+                            onClick={exportServiceHistory}
+                            disabled={exporting || filteredRecords.length === 0}
+                            className="w-full"
+                            variant="outline"
+                          >
+                            {exporting ? (
+                              <>Exporting...</>
+                            ) : (
+                              <>
+                                <Download className="w-4 h-4 mr-2" />
+                                Export CSV
+                              </>
+                            )}
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
