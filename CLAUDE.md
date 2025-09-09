@@ -15,6 +15,7 @@ pnpm install          # Install dependencies
 pnpm dev              # Start development server (http://localhost:3000)
 pnpm build            # Build for production
 pnpm preview          # Preview production build
+pnpm lint             # Run ESLint for code quality
 ```
 
 ### Backend Development
@@ -29,6 +30,8 @@ python app.py                    # Start development server (http://localhost:50
 docker-compose up -d     # Start all services in production mode
 docker-compose down       # Stop all services
 docker-compose logs -f    # View logs
+docker-compose logs backend  # View backend logs only
+docker-compose logs frontend # View frontend logs only
 ```
 
 ### API Documentation
@@ -41,22 +44,47 @@ docker-compose logs -f    # View logs
 - **React 18** with TypeScript and Vite
 - **Component Library**: Custom UI components using Radix UI primitives in `src/components/ui/`
 - **Pages**: Main application views in `src/pages/`
-- **State Management**: React hooks with local state
+- **State Management**: React hooks with local state (no Redux)
 - **API Client**: Axios instance in `src/lib/api.ts`
-- **Routing**: React Router with navigation component
+- **Routing**: React Router with SPA support
+- **Build Tool**: Vite with custom path aliases (`@/` for `src/`)
+- **Styling**: Tailwind CSS with PostCSS
+- **Linting**: ESLint with React hooks and refresh plugins
 
 ### Backend Structure (`backend/`)
 - **Flask 2.3.3** with Blueprint pattern
 - **Routes**: Modular route handling in `routes/` directory
 - **Models**: Data models and MongoDB schema in `models.py`
 - **Services**: Business logic separation (for future expansion)
-- **CORS**: Configured for frontend development
-- **Swagger**: Auto-generated API documentation
+- **CORS**: Configured for both development and production
+- **Swagger**: Auto-generated API documentation (OpenAPI 2.0)
+- **Serialization**: Custom JSON encoder for MongoDB ObjectId and datetime
+- **Python Version**: 3.11 with PyMongo driver
 
 ### Database
 - **MongoDB** with PyMongo driver
 - **Collections**: vehicles, maintenance_items, service_records
 - **ObjectIds**: Used as primary keys with proper serialization
+
+## Enhanced Features
+
+### Vehicle-Specific Maintenance Schedules
+- **Mazda CX-5 2016**: Official maintenance schedule data in `backend/data/mazda_cx5_2016_philippines.py`
+- **Automatic Detection**: Identifies Mazda CX-5 2014-2017 models for automatic schedule population
+- **Philippines-Specific**: Optimized for severe driving conditions
+- **Sync Script**: Command-line tool for updating maintenance schedules
+
+### Dashboard Intelligence
+- **Maintenance Status**: Due now, due soon, and OK items with smart calculations
+- **Priority Sorting**: Overdue items first, then by due date
+- **Smart Calculations**: Based on last service and purchase mileage
+- **Export Functionality**: Service history export to CSV/Excel formats
+
+### Production Deployment
+- **Nginx Reverse Proxy**: Proper API routing and SPA support
+- **Docker Volumes**: Persistent MongoDB data storage
+- **Health Monitoring**: System health checks at `/health` endpoint
+- **Cloudflare Tunnel**: Optional remote access setup
 
 ## Key Data Models
 
@@ -68,6 +96,7 @@ interface Vehicle {
   model: string;
   year: number;
   current_mileage: number;
+  purchase_mileage?: number;  // Enhanced field for initial mileage tracking
   created_at: string;
 }
 ```
@@ -81,6 +110,7 @@ interface MaintenanceItem {
   interval_km: number;
   description?: string;
   vehicle_id: string;
+  action_type?: 'Replace' | 'Inspect' | 'Lubricate' | 'Tighten' | 'Service';  // Enhanced action types
 }
 ```
 

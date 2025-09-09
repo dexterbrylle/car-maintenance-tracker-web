@@ -9,6 +9,7 @@ import { QuickServiceModal } from "@/components/QuickServiceModal"
 import { useToast } from "@/components/ui/toast"
 import { ServiceForm } from "@/components/ServiceForm"
 import { ServiceScheduler } from "@/components/ServiceScheduler"
+import { MaintenanceInsights } from "@/components/MaintenanceInsights"
 import { Vehicle, DashboardData, MaintenanceItem, ServiceRecord } from "@/types"
 import { api } from "@/lib/api"
 import { Car, Plus, Calendar, Clock, AlertTriangle, CheckCircle, TrendingUp, Loader2 } from "lucide-react"
@@ -261,6 +262,16 @@ export function Dashboard() {
 
           {showScheduler && selectedVehicleId && (
             <ServiceScheduler vehicleId={selectedVehicleId} />
+          )}
+
+          {/* Maintenance Insights Section */}
+          {selectedVehicle && dashboardData && (
+            <MaintenanceInsights 
+              vehicle={selectedVehicle}
+              completedServices={serviceRecords.slice(0, 3)}
+              upcomingMaintenance={dashboardData.due_soon.map(item => item.maintenance_item)}
+              dueNowItems={dashboardData.due_now.map(item => item.maintenance_item)}
+            />
           )}
 
           {/* Overview Section */}
