@@ -1,7 +1,9 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
 from models import MaintenanceItem, ServiceRecord, Vehicle
 from bson.objectid import ObjectId
 from datetime import datetime
+import csv
+import io
 
 bp = Blueprint('maintenance', __name__)
 
@@ -139,5 +141,103 @@ def get_simple_maintenance_items(vehicle_id):
         # Serialize each maintenance item to handle ObjectId and datetime
         serialized_items = [serialize_maintenance_item(item) for item in maintenance_items]
         return jsonify(serialized_items), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/export/<vehicle_id>', methods=['GET'])
+def export_maintenance_schedule(vehicle_id):
+    """Export maintenance schedule to CSV format"""
+    try:
+        # Get vehicle info
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
+        # Get maintenance items and service records
+        maintenance_items = MaintenanceItem.get_maintenance_items_by_vehicle(vehicle_id)
+        service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
+        
+        current_mileage = vehicle.get('current_mileage', 0)
+        purchase_mileage = vehicle.get('purchase_mileage', 0)
+        
+        # Create CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'Item', 'Category', 'Interval (km)', 'Action Type', 'Description',
+            'Last Service Date', 'Last Service Mileage', 'Next Due Mileage',
+            'Current Mileage', 'Status', 'Miles Until Due', 'Service Count', 'Priority'
+        ])
+        
+        # Process each maintenance item
+        for item in maintenance_items:
+            item_id_str = str(item['_id'])
+            
+            # Find the most recent service record for this maintenance item
+            relevant_services = [
+                s for s in service_records 
+                if str(s.get('maintenance_item_id')) == item_id_str
+            ]
+            relevant_services.sort(key=lambda x: x.get('mileage', 0), reverse=True)
+            
+            # Calculate status
+            if relevant_services:
+                last_service = relevant_services[0]
+                last_service_mileage = last_service.get('mileage', 0)
+                last_service_date = last_service.get('date')
+            else:
+                last_service_mileage = purchase_mileage
+                last_service_date = None
+            
+            interval_km = item.get('interval_km', 0)
+            next_due_mileage = last_service_mileage + interval_km
+            
+            # Determine status
+            if current_mileage >= next_due_mileage:
+                status = 'Overdue'
+                miles_until_due = current_mileage - next_due_mileage
+                priority = 'High'
+            elif current_mileage >= (next_due_mileage - 1000):
+                status = 'Due Soon'
+                miles_until_due = next_due_mileage - current_mileage
+                priority = 'Medium'
+            else:
+                status = 'OK'
+                miles_until_due = next_due_mileage - current_mileage
+                priority = 'Low'
+            
+            # Write row
+            writer.writerow([
+                item.get('name', ''),
+                item.get('category', ''),
+                item.get('interval_km', ''),
+                item.get('action', 'Inspect'),
+                item.get('description', ''),
+                last_service_date or 'Never',
+                last_service_mileage,
+                next_due_mileage,
+                current_mileage,
+                status,
+                miles_until_due,
+                len(relevant_services),
+                priority
+            ])
+        
+        # Create response
+        csv_content = output.getvalue()
+        output.close()
+        
+        # Generate filename
+        vehicle_name = f"{vehicle.get('year', '')}-{vehicle.get('make', '')}-{vehicle.get('model', '')}".strip('-')
+        filename = f"maintenance-schedule-{vehicle_name}-{datetime.now().strftime('%Y%m%d')}.csv"
+        
+        response = make_response(csv_content)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500

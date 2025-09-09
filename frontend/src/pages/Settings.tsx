@@ -38,9 +38,11 @@ export function Settings() {
   const loadVehicles = async () => {
     try {
       const response = await api.getVehicles()
-      setVehicles(response.data)
+      const vehiclesData = Array.isArray(response) ? response : []
+      setVehicles(vehiclesData)
     } catch (error) {
       console.error('Failed to load vehicles:', error)
+      setVehicles([])
     }
   }
 

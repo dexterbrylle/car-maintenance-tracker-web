@@ -66,10 +66,11 @@ export function ServiceSchedulerPage() {
 
   const loadVehicles = async () => {
     try {
-      const response = await api.getVehicles()
-      setVehicles(response.data)
-      if (response.data.length > 0 && !selectedVehicleId) {
-        setSelectedVehicleId(response.data[0]._id)
+      const vehiclesData = await api.getVehicles()
+      const vehiclesArray = Array.isArray(vehiclesData) ? vehiclesData : []
+      setVehicles(vehiclesArray)
+      if (vehiclesArray.length > 0 && !selectedVehicleId) {
+        setSelectedVehicleId(vehiclesArray[0]._id)
       }
     } catch (error) {
       console.error('Failed to load vehicles:', error)
@@ -87,8 +88,8 @@ export function ServiceSchedulerPage() {
     if (!selectedVehicleId) return
     
     try {
-      const response = await api.getMaintenanceSchedule(selectedVehicleId)
-      setScheduleData(response.data)
+      const scheduleResponse = await api.getMaintenanceSchedule(selectedVehicleId)
+      setScheduleData(scheduleResponse)
     } catch (error) {
       console.error('Failed to load maintenance schedule:', error)
       addToast({
@@ -167,7 +168,7 @@ export function ServiceSchedulerPage() {
           </p>
         </div>
 
-        {vehicles.length === 0 ? (
+        {(!vehicles || vehicles.length === 0) ? (
           <Card>
             <CardHeader>
               <CardTitle>No Vehicles</CardTitle>

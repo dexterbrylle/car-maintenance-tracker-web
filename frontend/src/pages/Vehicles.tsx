@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import React from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,8 +26,8 @@ export function Vehicles() {
 
   const loadVehicles = async () => {
     try {
-      const response = await api.getVehicles()
-      setVehicles(response.data)
+      const vehiclesData = await api.getVehicles()
+      setVehicles(Array.isArray(vehiclesData) ? vehiclesData : [])
     } catch (error) {
       console.error('Failed to load vehicles:', error)
     } finally {

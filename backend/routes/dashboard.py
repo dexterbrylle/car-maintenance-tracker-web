@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify
-from models import Vehicle, MaintenanceItem, ServiceRecord
+from models import Vehicle, MaintenanceItem, ServiceRecord, FillUp
 from bson.objectid import ObjectId
 from datetime import datetime
+from utils.insights import generate_insights, predict_maintenance_needs, get_fuel_performance_summary
+from utils.fuel_calculations import get_fuel_performance_trends, calculate_monthly_fuel_cost
 
 bp = Blueprint('dashboard', __name__)
 
@@ -31,6 +33,46 @@ def serialize_vehicle(vehicle):
         if 'created_at' in vehicle and isinstance(vehicle['created_at'], datetime):
             vehicle['created_at'] = vehicle['created_at'].isoformat()
     return vehicle
+
+def get_fuel_performance(vehicle_id):
+    """Get current fuel performance metrics for dashboard"""
+    try:
+        # Get recent fill-ups for fuel performance calculation
+        recent_fillups = FillUp.get_fillups_by_vehicle(vehicle_id, limit=5)
+        
+        if not recent_fillups:
+            return None
+        
+        # Get basic fuel stats
+        fuel_stats = FillUp.get_fuel_stats(vehicle_id)
+        if not fuel_stats:
+            return None
+        
+        # Get performance trends
+        trends = get_fuel_performance_trends(vehicle_id, days=90)
+        
+        # Calculate monthly fuel cost
+        monthly_costs = calculate_monthly_fuel_cost(vehicle_id, months=1)
+        monthly_fuel_cost = monthly_costs[0]['total_cost'] if monthly_costs else 0
+        
+        # Get the most recent fill-up for current metrics
+        latest_fillup = recent_fillups[0]
+        
+        return {
+            "current_economy": latest_fillup.get('fuel_economy_kmpl'),
+            "avg_economy_recent": fuel_stats.get('avg_fuel_economy'),
+            "cost_per_km": latest_fillup.get('cost_per_km'),
+            "last_fillup_date": latest_fillup.get('date'),
+            "monthly_fuel_cost": monthly_fuel_cost,
+            "total_fillups": fuel_stats.get('total_fillups', 0),
+            "best_fuel_economy": fuel_stats.get('best_fuel_economy'),
+            "worst_fuel_economy": fuel_stats.get('worst_fuel_economy'),
+            "trend_percent": trends.get('trend_percent') if trends else 0
+        }
+        
+    except Exception as e:
+        print(f"Error getting fuel performance: {e}")
+        return None
 
 @bp.route('/<vehicle_id>', methods=['GET'])
 def get_dashboard(vehicle_id):
@@ -115,11 +157,48 @@ def get_dashboard(vehicle_id):
         due_soon.sort(key=lambda x: x['miles_until_due'])
         ok.sort(key=lambda x: x['miles_until_due'])
         
+        # Get fuel performance data
+        fuel_performance = get_fuel_performance(vehicle_id)
+        
+        # Generate smart insights
+        insights = generate_insights(vehicle_id)
+        
         return jsonify({
             'vehicle': serialize_vehicle(vehicle),
-            'due_now': due_now,
-            'due_soon': due_soon,
-            'ok': ok
+            'maintenance': {
+                'due_now': due_now,
+                'due_soon': due_soon,
+                'ok': ok
+            },
+            'fuel_performance': fuel_performance,
+            'insights': insights
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/<vehicle_id>/insights', methods=['GET'])
+def get_insights(vehicle_id):
+    """Get fuel-maintenance correlation insights for a vehicle"""
+    try:
+        # Get vehicle information
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
+        # Generate fuel-maintenance insights
+        insights = generate_insights(vehicle_id)
+        
+        # Get maintenance predictions
+        predictions = predict_maintenance_needs(vehicle_id)
+        
+        # Get fuel performance summary
+        fuel_summary = get_fuel_performance_summary(vehicle_id)
+        
+        return jsonify({
+            'insights': insights,
+            'predictions': predictions,
+            'fuel_summary': fuel_summary
         }), 200
         
     except Exception as e:

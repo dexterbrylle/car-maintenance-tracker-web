@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { MaintenanceItem } from "@/types"
 import { useState } from "react"
+import React from "react"
 import { api } from "@/lib/api"
 import { Settings, Search } from "lucide-react"
 
@@ -125,8 +126,8 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
 
       // Update vehicle mileage if the new mileage is higher
       try {
-        const vehiclesResponse = await api.getVehicles()
-        const currentVehicle = vehiclesResponse.data.find((v: any) => v._id === vehicleId)
+        const vehicles = await api.getVehicles()
+        const currentVehicle = vehicles.find((v: any) => v._id === vehicleId)
         if (currentVehicle && newMileage > currentVehicle.current_mileage) {
           await api.updateVehicle(vehicleId, { current_mileage: newMileage })
         }

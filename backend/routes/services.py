@@ -132,6 +132,11 @@ def delete_service_record(service_id):
 @bp.route('/export/<vehicle_id>', methods=['GET'])
 def export_service_history(vehicle_id):
     try:
+        # Get query parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        columns = request.args.getlist('columns')
+        
         # Get vehicle info
         vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
         if not vehicle:
@@ -144,15 +149,27 @@ def export_service_history(vehicle_id):
         # Create maintenance item lookup
         maintenance_lookup = {str(item['_id']): item for item in maintenance_items}
         
+        # Filter by date range if provided
+        if start_date:
+            service_records = [r for r in service_records if r.get('date', '') >= start_date]
+        if end_date:
+            service_records = [r for r in service_records if r.get('date', '') <= end_date]
+        
+        # Define all available columns
+        all_columns = [
+            'Date', 'Mileage', 'Maintenance Item', 'Category', 
+            'Action Type', 'Cost', 'Notes'
+        ]
+        
+        # Use provided columns or default to all
+        selected_columns = columns if columns else all_columns
+        
         # Create CSV content
         output = io.StringIO()
         writer = csv.writer(output)
         
         # Write header
-        writer.writerow([
-            'Date', 'Mileage', 'Maintenance Item', 'Category', 
-            'Action Type', 'Cost', 'Notes'
-        ])
+        writer.writerow(selected_columns)
         
         # Sort records by date
         service_records.sort(key=lambda x: x.get('date', ''), reverse=True)
@@ -162,23 +179,36 @@ def export_service_history(vehicle_id):
             maintenance_item_id = str(record.get('maintenance_item_id', ''))
             maintenance_item = maintenance_lookup.get(maintenance_item_id, {})
             
-            writer.writerow([
-                record.get('date', ''),
-                record.get('mileage', ''),
-                maintenance_item.get('name', 'Unknown'),
-                maintenance_item.get('category', ''),
-                maintenance_item.get('action', 'Service'),
-                record.get('cost', 0),
-                record.get('notes', '')
-            ])
+            # Build row data based on selected columns
+            row_data = []
+            for column in selected_columns:
+                if column == 'Date':
+                    row_data.append(record.get('date', ''))
+                elif column == 'Mileage':
+                    row_data.append(record.get('mileage', ''))
+                elif column == 'Maintenance Item':
+                    row_data.append(maintenance_item.get('name', 'Unknown'))
+                elif column == 'Category':
+                    row_data.append(maintenance_item.get('category', ''))
+                elif column == 'Action Type':
+                    row_data.append(maintenance_item.get('action', 'Service'))
+                elif column == 'Cost':
+                    row_data.append(record.get('cost', 0))
+                elif column == 'Notes':
+                    row_data.append(record.get('notes', ''))
+            
+            writer.writerow(row_data)
         
         # Prepare response
         csv_content = output.getvalue()
         output.close()
         
-        # Generate filename
+        # Generate filename with date range info
         vehicle_name = f"{vehicle.get('year', '')}-{vehicle.get('make', '')}-{vehicle.get('model', '')}".strip('-')
-        filename = f"service-history-{vehicle_name}-{datetime.now().strftime('%Y%m%d')}.csv"
+        date_suffix = ""
+        if start_date or end_date:
+            date_suffix = f"_{start_date or 'start'}-{end_date or 'end'}"
+        filename = f"service-history-{vehicle_name}{date_suffix}-{datetime.now().strftime('%Y%m%d')}.csv"
         
         from flask import make_response
         response = make_response(csv_content)

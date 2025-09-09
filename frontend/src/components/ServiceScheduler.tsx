@@ -31,10 +31,11 @@ export function ServiceScheduler({ vehicleId: propVehicleId }: ServiceSchedulerP
 
   const loadVehicles = async () => {
     try {
-      const response = await api.getVehicles()
-      setVehicles(response.data)
-      if (response.data.length > 0 && !selectedVehicleId) {
-        setSelectedVehicleId(response.data[0]._id)
+      const vehiclesData = await api.getVehicles()
+      const vehiclesArray = Array.isArray(vehiclesData) ? vehiclesData : []
+      setVehicles(vehiclesArray)
+      if (vehiclesArray.length > 0 && !selectedVehicleId) {
+        setSelectedVehicleId(vehiclesArray[0]._id)
       }
     } catch (error) {
       console.error('Failed to load vehicles:', error)
@@ -45,8 +46,8 @@ export function ServiceScheduler({ vehicleId: propVehicleId }: ServiceSchedulerP
 
   const loadMaintenanceItems = async () => {
     try {
-      const response = await api.getMaintenance(selectedVehicleId)
-      setMaintenanceItems(response.data)
+      const maintenanceData = await api.getMaintenance(selectedVehicleId)
+      setMaintenanceItems(Array.isArray(maintenanceData) ? maintenanceData : [])
     } catch (error) {
       console.error('Failed to load maintenance items:', error)
     }
@@ -54,8 +55,8 @@ export function ServiceScheduler({ vehicleId: propVehicleId }: ServiceSchedulerP
 
   const loadServiceRecords = async () => {
     try {
-      const response = await api.getServices(selectedVehicleId)
-      setServiceRecords(response.data)
+      const serviceData = await api.getServices(selectedVehicleId)
+      setServiceRecords(Array.isArray(serviceData) ? serviceData : [])
     } catch (error) {
       console.error('Failed to load service records:', error)
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,12 +10,15 @@ import { useToast } from "@/components/ui/toast"
 import { ServiceForm } from "@/components/ServiceForm"
 import { ServiceScheduler } from "@/components/ServiceScheduler"
 import { MaintenanceInsights } from "@/components/MaintenanceInsights"
+import { FuelPerformanceMetrics } from "@/components/FuelPerformanceMetrics"
+import { ExportButton } from "@/components/ExportButton"
+import { DashboardSkeleton, VehicleSelectorSkeleton } from "@/components/ui/skeleton"
 import { Vehicle, DashboardData, MaintenanceItem, ServiceRecord } from "@/types"
 import { api } from "@/lib/api"
 import { Car, Plus, Calendar, Clock, AlertTriangle, CheckCircle, TrendingUp, Loader2 } from "lucide-react"
 
 export function Dashboard() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [vehicles, setVehicles] = useState<Vehicle[] | null>(null)
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("")
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [maintenanceItems, setMaintenanceItems] = useState<MaintenanceItem[]>([])
@@ -29,73 +32,88 @@ export function Dashboard() {
   const [showQuickServiceModal, setShowQuickServiceModal] = useState(false)
   const { addToast } = useToast()
 
-  useEffect(() => {
-    loadVehicles()
-  }, [])
+  // Memoized calculations
+  const selectedVehicle = useMemo(() => 
+    dashboardData?.vehicle || (vehicles && vehicles.find(v => v._id === selectedVehicleId)), 
+    [dashboardData, vehicles, selectedVehicleId]
+  )
 
+  // const totalCost = useMemo(() => 
+  //   serviceRecords.reduce((sum, record) => sum + record.cost, 0), 
+  //   [serviceRecords]
+  // )
+
+  
+  // Load vehicles data
   useEffect(() => {
-    if (selectedVehicleId) {
-      loadDashboardData()
-      loadMaintenanceItems()
-      loadServiceRecords()
+    const loadVehicles = async () => {
+      try {
+        const response = await api.getVehicles()
+        const vehiclesData = Array.isArray(response) ? response : []
+        setVehicles(vehiclesData)
+        if (vehiclesData.length > 0 && !selectedVehicleId) {
+          setSelectedVehicleId(vehiclesData[0]._id)
+        }
+      } catch (error) {
+        console.error('Failed to load vehicles:', error)
+        addToast({
+          title: "Error",
+          description: "Failed to load vehicles",
+          variant: "error"
+        })
+      } finally {
+        setLoading(false)
+      }
     }
+
+    loadVehicles()
+  }, [selectedVehicleId, addToast])
+
+  // Load vehicle-specific data when vehicle is selected
+  useEffect(() => {
+    if (!selectedVehicleId) return
+
+    const loadVehicleData = async () => {
+      setDashboardLoading(true)
+      setError(null)
+
+      try {
+        const [dashboardResponse, maintenanceResponse, serviceResponse] = await Promise.all([
+          api.getDashboard(selectedVehicleId),
+          api.getMaintenance(selectedVehicleId),
+          api.getServices(selectedVehicleId)
+        ])
+
+        setDashboardData(dashboardResponse)
+        setMaintenanceItems(Array.isArray(maintenanceResponse) ? maintenanceResponse : [])
+        setServiceRecords(Array.isArray(serviceResponse) ? serviceResponse : [])
+      } catch (error) {
+        console.error('Failed to load vehicle data:', error)
+        setError('Failed to load vehicle data')
+        addToast({
+          title: "Error",
+          description: "Failed to load vehicle data",
+          variant: "error"
+        })
+      } finally {
+        setDashboardLoading(false)
+      }
+    }
+
+    loadVehicleData()
+  }, [selectedVehicleId, addToast])
+
+  // Memoized handlers
+  const handleServiceComplete = useCallback(() => {
+    // Refresh data
+    if (selectedVehicleId) {
+      api.getDashboard(selectedVehicleId).then(setDashboardData)
+      api.getServices(selectedVehicleId).then(data => setServiceRecords(Array.isArray(data) ? data : []))
+    }
+    setShowServiceForm(false)
   }, [selectedVehicleId])
 
-  const loadVehicles = async () => {
-    try {
-      const response = await api.getVehicles()
-      setVehicles(response.data)
-      if (response.data.length > 0 && !selectedVehicleId) {
-        setSelectedVehicleId(response.data[0]._id)
-      }
-    } catch (error) {
-      console.error('Failed to load vehicles:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadDashboardData = async () => {
-    setDashboardLoading(true)
-    setError(null)
-    try {
-      const response = await api.getDashboard(selectedVehicleId)
-      setDashboardData(response.data)
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error)
-      setError('Failed to load dashboard data')
-    } finally {
-      setDashboardLoading(false)
-    }
-  }
-
-  const loadMaintenanceItems = async () => {
-    try {
-      const response = await api.getMaintenance(selectedVehicleId)
-      setMaintenanceItems(Array.isArray(response.data) ? response.data : [])
-    } catch (error) {
-      console.error('Failed to load maintenance items:', error)
-      setMaintenanceItems([])
-    }
-  }
-
-  const loadServiceRecords = async () => {
-    try {
-      const response = await api.getServices(selectedVehicleId)
-      setServiceRecords(Array.isArray(response.data) ? response.data : [])
-    } catch (error) {
-      console.error('Failed to load service records:', error)
-      setServiceRecords([])
-    }
-  }
-
-  const handleServiceComplete = () => {
-    loadDashboardData()
-    loadServiceRecords()
-    setShowServiceForm(false)
-  }
-
-  const handleMileageUpdate = (newMileage: number) => {
+  const handleMileageUpdate = useCallback((newMileage: number) => {
     if (dashboardData) {
       setDashboardData({
         ...dashboardData,
@@ -103,10 +121,12 @@ export function Dashboard() {
       })
     }
     // Refresh dashboard data to recalculate due items
-    loadDashboardData()
-  }
+    if (selectedVehicleId) {
+      api.getDashboard(selectedVehicleId).then(setDashboardData)
+    }
+  }, [dashboardData, selectedVehicleId])
 
-  const handleMarkComplete = async (itemId: string) => {
+  const handleMarkComplete = useCallback(async (itemId: string) => {
     if (!dashboardData) return
     
     try {
@@ -122,7 +142,7 @@ export function Dashboard() {
       handleServiceComplete()
       
       // Find the maintenance item to show in toast
-      const item = [...dashboardData.due_now, ...dashboardData.due_soon, ...dashboardData.ok]
+      const item = [...dashboardData.maintenance.due_now, ...dashboardData.maintenance.due_soon, ...dashboardData.maintenance.ok]
         .find(item => item.maintenance_item._id === itemId)
       
       addToast({
@@ -139,48 +159,50 @@ export function Dashboard() {
         variant: "error"
       })
     }
-  }
+  }, [dashboardData, selectedVehicleId, handleServiceComplete, addToast])
 
-  const handleScheduleService = (itemId: string) => {
-    const item = [...dashboardData!.due_now, ...dashboardData!.due_soon, ...dashboardData!.ok]
+  const handleScheduleService = useCallback((itemId: string) => {
+    if (!dashboardData) return
+    
+    const item = [...dashboardData.maintenance.due_now, ...dashboardData.maintenance.due_soon, ...dashboardData.maintenance.ok]
       .find(item => item.maintenance_item._id === itemId)
     
     if (item) {
       setSelectedMaintenanceItem(item.maintenance_item)
       setShowQuickServiceModal(true)
     }
-  }
+  }, [dashboardData])
 
-  const handleQuickServiceComplete = () => {
+  const handleQuickServiceComplete = useCallback(() => {
     setShowQuickServiceModal(false)
     setSelectedMaintenanceItem(null)
     handleServiceComplete()
-  }
-
-  const selectedVehicle = dashboardData?.vehicle || vehicles.find(v => v._id === selectedVehicleId)
+  }, [handleServiceComplete])
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading dashboard...
-        </div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Car Maintenance Tracker</h1>
-          <p className="text-muted-foreground">Keep track of your vehicle maintenance schedule</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Car Maintenance Tracker</h1>
+              <p className="text-muted-foreground">Keep track of your vehicle maintenance schedule</p>
+            </div>
+            <ExportButton
+              vehicles={vehicles || []}
+              selectedVehicleId={selectedVehicleId}
+              onVehicleChange={setSelectedVehicleId}
+            />
+          </div>
         </div>
 
         <div className="grid gap-6 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {vehicles.length === 0 ? (
+            {vehicles && vehicles.length === 0 ? (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -201,11 +223,15 @@ export function Dashboard() {
                     <CardDescription>Select a vehicle to view maintenance</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <VehicleSelector
-                      vehicles={vehicles}
-                      selectedVehicleId={selectedVehicleId}
-                      onVehicleChange={setSelectedVehicleId}
-                    />
+                    {dashboardLoading ? (
+                      <VehicleSelectorSkeleton />
+                    ) : (
+                      <VehicleSelector
+                        vehicles={vehicles || []}
+                        selectedVehicleId={selectedVehicleId}
+                        onVehicleChange={setSelectedVehicleId}
+                      />
+                    )}
                   </CardContent>
                 </Card>
 
@@ -269,9 +295,46 @@ export function Dashboard() {
             <MaintenanceInsights 
               vehicle={selectedVehicle}
               completedServices={serviceRecords.slice(0, 3)}
-              upcomingMaintenance={dashboardData.due_soon.map(item => item.maintenance_item)}
-              dueNowItems={dashboardData.due_now.map(item => item.maintenance_item)}
+              upcomingMaintenance={dashboardData.maintenance.due_soon.map(item => item.maintenance_item)}
+              dueNowItems={dashboardData.maintenance.due_now.map(item => item.maintenance_item)}
             />
+          )}
+
+          {/* Fuel Performance Metrics Section */}
+          {selectedVehicle && (
+            <FuelPerformanceMetrics vehicleId={selectedVehicleId} />
+          )}
+
+          {/* AI Insights Section */}
+          {selectedVehicle && dashboardData && dashboardData.insights && dashboardData.insights.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  AI-Powered Insights
+                </CardTitle>
+                <CardDescription>
+                  Intelligent analysis of your vehicle's maintenance and fuel data
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {dashboardData.insights.map((insight, index) => (
+                    <div key={index} className="p-4 bg-muted rounded-lg">
+                      <h4 className="font-semibold mb-2">{insight.title || insight.type}</h4>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {insight.message || insight.description}
+                      </p>
+                      {insight.recommendation && (
+                        <p className="text-sm font-medium text-blue-600">
+                          Recommendation: {insight.recommendation}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Overview Section */}
@@ -297,7 +360,16 @@ export function Dashboard() {
                 ) : error ? (
                   <div className="text-center py-8">
                     <p className="text-red-500 mb-4">{error}</p>
-                    <Button onClick={loadDashboardData} variant="outline" size="sm">
+                    <Button onClick={() => {
+                      // Reload vehicle data
+                      if (selectedVehicleId) {
+                        setDashboardLoading(true)
+                        api.getDashboard(selectedVehicleId)
+                          .then(setDashboardData)
+                          .catch(() => setError('Failed to load vehicle data'))
+                          .finally(() => setDashboardLoading(false))
+                      }
+                    }} variant="outline" size="sm">
                       Try Again
                     </Button>
                   </div>
@@ -307,21 +379,21 @@ export function Dashboard() {
                       <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
                         <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
                         <div className="text-2xl font-bold text-green-600">
-                          {dashboardData.ok.length}
+                          {dashboardData.maintenance.ok.length}
                         </div>
                         <div className="text-sm text-green-700">Up to Date</div>
                       </div>
                       <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                         <Clock className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
                         <div className="text-2xl font-bold text-yellow-600">
-                          {dashboardData.due_soon.length}
+                          {dashboardData.maintenance.due_soon.length}
                         </div>
                         <div className="text-sm text-yellow-700">Due Soon</div>
                       </div>
                       <div className="text-center p-4 bg-red-50 rounded-lg border border-red-200">
                         <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
                         <div className="text-2xl font-bold text-red-600">
-                          {dashboardData.due_now.length}
+                          {dashboardData.maintenance.due_now.length}
                         </div>
                         <div className="text-sm text-red-700">Due Now</div>
                       </div>
@@ -362,7 +434,16 @@ export function Dashboard() {
                 ) : (
                   <div className="text-center py-8">
                     <p className="text-muted-foreground mb-4">No maintenance data available</p>
-                    <Button onClick={loadDashboardData} variant="outline" size="sm">
+                    <Button onClick={() => {
+                      // Reload dashboard data
+                      if (selectedVehicleId) {
+                        setDashboardLoading(true)
+                        api.getDashboard(selectedVehicleId)
+                          .then(setDashboardData)
+                          .catch(() => setError('Failed to load vehicle data'))
+                          .finally(() => setDashboardLoading(false))
+                      }
+                    }} variant="outline" size="sm">
                       Load Data
                     </Button>
                   </div>
@@ -374,16 +455,16 @@ export function Dashboard() {
 
         {selectedVehicleId && dashboardData && (
           <div className="space-y-6">
-            {dashboardData.due_now.length > 0 && (
+            {dashboardData.maintenance.due_now.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <AlertTriangle className="w-5 h-5 text-red-600" />
                   <h2 className="text-xl font-semibold text-red-600">
-                    DUE NOW ({dashboardData.due_now.length} {dashboardData.due_now.length === 1 ? 'item' : 'items'})
+                    DUE NOW ({dashboardData.maintenance.due_now.length} {dashboardData.maintenance.due_now.length === 1 ? 'item' : 'items'})
                   </h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {dashboardData.due_now.map((item) => (
+                  {dashboardData.maintenance.due_now.map((item) => (
                     <MaintenanceStatusCard
                       key={item.maintenance_item._id}
                       item={item}
@@ -396,16 +477,16 @@ export function Dashboard() {
               </div>
             )}
 
-            {dashboardData.due_soon.length > 0 && (
+            {dashboardData.maintenance.due_soon.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <Clock className="w-5 h-5 text-yellow-600" />
                   <h2 className="text-xl font-semibold text-yellow-600">
-                    DUE SOON ({dashboardData.due_soon.length} {dashboardData.due_soon.length === 1 ? 'item' : 'items'})
+                    DUE SOON ({dashboardData.maintenance.due_soon.length} {dashboardData.maintenance.due_soon.length === 1 ? 'item' : 'items'})
                   </h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {dashboardData.due_soon.map((item) => (
+                  {dashboardData.maintenance.due_soon.map((item) => (
                     <MaintenanceStatusCard
                       key={item.maintenance_item._id}
                       item={item}
@@ -418,16 +499,16 @@ export function Dashboard() {
               </div>
             )}
 
-            {dashboardData.ok.length > 0 && (
+            {dashboardData.maintenance.ok.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <CheckCircle className="w-5 h-5 text-green-600" />
                   <h2 className="text-xl font-semibold text-green-600">
-                    UP TO DATE ({dashboardData.ok.length}+ {dashboardData.ok.length === 1 ? 'item' : 'items'})
+                    UP TO DATE ({dashboardData.maintenance.ok.length}+ {dashboardData.maintenance.ok.length === 1 ? 'item' : 'items'})
                   </h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {dashboardData.ok.slice(0, 6).map((item) => (
+                  {dashboardData.maintenance.ok.slice(0, 6).map((item) => (
                     <MaintenanceStatusCard
                       key={item.maintenance_item._id}
                       item={item}
@@ -437,13 +518,13 @@ export function Dashboard() {
                     />
                   ))}
                 </div>
-                {dashboardData.ok.length > 6 && (
+                {dashboardData.maintenance.ok.length > 6 && (
                   <div className="text-center mt-4">
                     <Button
                       variant="outline"
                       onClick={() => setShowScheduler(!showScheduler)}
                     >
-                      View All {dashboardData.ok.length} Items
+                      View All {dashboardData.maintenance.ok.length} Items
                     </Button>
                   </div>
                 )}

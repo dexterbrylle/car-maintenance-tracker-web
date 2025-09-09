@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { VehicleSelector } from "@/components/VehicleSelector"
 import { ServiceForm } from "@/components/ServiceForm"
+import { ExportButton } from "@/components/ExportButton"
 import { useToast } from "@/components/ui/toast"
 import { Vehicle, ServiceRecord, MaintenanceItem } from "@/types"
 import { api } from "@/lib/api"
-import { History, Calendar, Gauge, Edit, Save, X, Trash2, Download, Search } from "lucide-react"
+import { History, Calendar, Gauge, Edit, Save, X, Trash2, Search } from "lucide-react"
 
 export function ServiceHistory() {
   const { addToast } = useToast()
@@ -18,7 +19,6 @@ export function ServiceHistory() {
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([])
   const [maintenanceItems, setMaintenanceItems] = useState<MaintenanceItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [exporting, setExporting] = useState(false)
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [filterType, setFilterType] = useState<string>("all")
   const [dateFilter, setDateFilter] = useState<string>("")
@@ -46,9 +46,10 @@ export function ServiceHistory() {
   const loadVehicles = async () => {
     try {
       const response = await api.getVehicles()
-      setVehicles(response.data)
-      if (response.data.length > 0 && !selectedVehicleId) {
-        setSelectedVehicleId(response.data[0]._id)
+      const vehiclesData = Array.isArray(response) ? response : []
+      setVehicles(vehiclesData)
+      if (vehiclesData.length > 0 && !selectedVehicleId) {
+        setSelectedVehicleId(vehiclesData[0]._id)
       }
     } catch (error) {
       console.error('Failed to load vehicles:', error)
@@ -65,7 +66,8 @@ export function ServiceHistory() {
   const loadServiceRecords = async () => {
     try {
       const response = await api.getServices(selectedVehicleId)
-      setServiceRecords(response.data)
+      const serviceData = Array.isArray(response) ? response : []
+      setServiceRecords(serviceData)
     } catch (error) {
       console.error('Failed to load service records:', error)
       addToast({
@@ -79,7 +81,8 @@ export function ServiceHistory() {
   const loadMaintenanceItems = async () => {
     try {
       const response = await api.getMaintenance(selectedVehicleId)
-      setMaintenanceItems(response.data)
+      const maintenanceData = Array.isArray(response) ? response : []
+      setMaintenanceItems(maintenanceData)
     } catch (error) {
       console.error('Failed to load maintenance items:', error)
       addToast({
@@ -90,52 +93,7 @@ export function ServiceHistory() {
     }
   }
 
-  const exportServiceHistory = async () => {
-    if (!selectedVehicleId) return
-    
-    setExporting(true)
-    try {
-      const response = await api.exportServiceHistory(selectedVehicleId)
-      
-      // Create blob and download
-      const blob = new Blob([response.data], { type: 'text/csv' })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      
-      // Extract filename from response headers or create default
-      const contentDisposition = response.headers['content-disposition']
-      let filename = 'service-history.csv'
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/)
-        if (filenameMatch) {
-          filename = filenameMatch[1]
-        }
-      }
-      
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      
-      addToast({
-        variant: "success",
-        title: "Export Complete",
-        description: "Service history exported successfully"
-      })
-    } catch (error) {
-      console.error('Failed to export service history:', error)
-      addToast({
-        variant: "error",
-        title: "Export Failed",
-        description: "Failed to export service history"
-      })
-    } finally {
-      setExporting(false)
-    }
-  }
-
+  
   const handleServiceComplete = () => {
     loadServiceRecords()
     setShowServiceForm(false)
@@ -185,7 +143,8 @@ export function ServiceHistory() {
       // Update vehicle mileage if the new mileage is higher
       try {
         const vehiclesResponse = await api.getVehicles()
-        const currentVehicle = vehiclesResponse.data.find((v: any) => v._id === selectedVehicleId)
+        const vehiclesData = Array.isArray(vehiclesResponse) ? vehiclesResponse : []
+        const currentVehicle = vehiclesData.find((v: any) => v._id === selectedVehicleId)
         if (currentVehicle && newMileage > currentVehicle.current_mileage) {
           await api.updateVehicle(selectedVehicleId, { current_mileage: newMileage })
         }
@@ -250,7 +209,7 @@ export function ServiceHistory() {
 
   const totalCost = serviceRecords.reduce((sum, record) => sum + record.cost, 0)
 
-  const selectedVehicle = vehicles.find(v => v._id === selectedVehicleId)
+  const selectedVehicle = vehicles?.find(v => v._id === selectedVehicleId)
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
@@ -368,21 +327,12 @@ export function ServiceHistory() {
                           </div>
                         </div>
                         <div className="pt-2">
-                          <Button
-                            onClick={exportServiceHistory}
-                            disabled={exporting || filteredRecords.length === 0}
+                          <ExportButton
+                            vehicles={vehicles}
+                            selectedVehicleId={selectedVehicleId}
+                            onVehicleChange={setSelectedVehicleId}
                             className="w-full"
-                            variant="outline"
-                          >
-                            {exporting ? (
-                              <>Exporting...</>
-                            ) : (
-                              <>
-                                <Download className="w-4 h-4 mr-2" />
-                                Export CSV
-                              </>
-                            )}
-                          </Button>
+                          />
                         </div>
                       </CardContent>
                     </Card>
