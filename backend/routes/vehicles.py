@@ -37,10 +37,8 @@ def add_vehicle():
         # Create vehicle
         vehicle_id = Vehicle.create_vehicle(data)
         
-        # If it's a Mazda CX-5 2016-2017, add default maintenance items
-        if (data.get('make', '').lower() == 'mazda' and 
-            data.get('model', '').lower() == 'cx-5' and 
-            data.get('year') in [2016, 2017]):
+        # If it's a Mazda CX-5 2014-2017, add default maintenance items
+        if MaintenanceItem.should_create_mazda_schedule(data):
             MaintenanceItem.create_default_maintenance_items(vehicle_id)
         
         return jsonify({'id': vehicle_id, 'message': 'Vehicle created successfully'}), 201
@@ -77,5 +75,37 @@ def create_maintenance_items(vehicle_id):
     try:
         MaintenanceItem.create_default_maintenance_items(vehicle_id)
         return jsonify({'message': 'Maintenance items created successfully'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/<vehicle_id>/mileage', methods=['PATCH'])
+def update_mileage(vehicle_id):
+    try:
+        data = request.get_json()
+        
+        if 'current_mileage' not in data:
+            return jsonify({'error': 'Missing required field: current_mileage'}), 400
+        
+        # Validate mileage is a positive number
+        new_mileage = data['current_mileage']
+        if not isinstance(new_mileage, (int, float)) or new_mileage < 0:
+            return jsonify({'error': 'Mileage must be a positive number'}), 400
+        
+        # Get current vehicle to validate mileage is not decreasing
+        current_vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        if not current_vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
+        current_mileage = current_vehicle.get('current_mileage', 0)
+        if new_mileage < current_mileage:
+            return jsonify({'error': 'New mileage cannot be less than current mileage'}), 400
+        
+        # Update mileage
+        update_data = {'current_mileage': new_mileage}
+        if Vehicle.update_vehicle(vehicle_id, update_data):
+            return jsonify({'message': 'Mileage updated successfully', 'current_mileage': new_mileage}), 200
+        else:
+            return jsonify({'error': 'Vehicle not found'}), 404
+            
     except Exception as e:
         return jsonify({'error': str(e)}), 500

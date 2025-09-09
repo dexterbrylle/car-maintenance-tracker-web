@@ -15,6 +15,7 @@ class Vehicle:
             'model': data.get('model'),
             'year': data.get('year'),
             'current_mileage': data.get('current_mileage', 0),
+            'purchase_mileage': data.get('purchase_mileage', 0),
             'created_at': datetime.utcnow()
         }
         result = db.vehicles.insert_one(vehicle_data)
@@ -30,7 +31,7 @@ class Vehicle:
     
     @staticmethod
     def update_vehicle(vehicle_id, data):
-        update_data = {k: v for k, v in data.items() if k in ['make', 'model', 'year', 'current_mileage']}
+        update_data = {k: v for k, v in data.items() if k in ['make', 'model', 'year', 'current_mileage', 'purchase_mileage']}
         result = db.vehicles.update_one(
             {'_id': ObjectId(vehicle_id)},
             {'$set': update_data}
@@ -50,6 +51,7 @@ class MaintenanceItem:
             'category': data.get('category'),
             'interval_km': data.get('interval_km'),
             'description': data.get('description', ''),
+            'action': data.get('action', 'Inspect'),
             'vehicle_id': ObjectId(data.get('vehicle_id'))
         }
         result = db.maintenance_items.insert_one(item_data)
@@ -64,62 +66,44 @@ class MaintenanceItem:
         return db.maintenance_items.find_one({'_id': ObjectId(item_id)})
     
     @staticmethod
+    def update_maintenance_item(item_id, data):
+        update_data = {k: v for k, v in data.items() if k in ['name', 'category', 'interval_km', 'description', 'action']}
+        result = db.maintenance_items.update_one(
+            {'_id': ObjectId(item_id)},
+            {'$set': update_data}
+        )
+        return result.modified_count > 0
+    
+    @staticmethod
     def create_default_maintenance_items(vehicle_id):
-        # Default maintenance items for Mazda CX-5 2016
-        default_items = [
-            {
-                'name': 'Engine Oil & Filter',
-                'category': 'Engine',
-                'interval_km': 8000,
-                'description': 'Replace engine oil and filter',
+        # Import the official Mazda CX-5 2016 schedule
+        from data.mazda_cx5_2016_philippines import MAZDA_CX5_2016_PHILIPPINES_SCHEDULE
+        
+        default_items = []
+        for item in MAZDA_CX5_2016_PHILIPPINES_SCHEDULE:
+            default_items.append({
+                'name': item['name'],
+                'category': item['category'],
+                'interval_km': item['interval_km'],
+                'description': item['description'],
+                'action': item['action'],
                 'vehicle_id': ObjectId(vehicle_id)
-            },
-            {
-                'name': 'Air Filter',
-                'category': 'Engine',
-                'interval_km': 48000,
-                'description': 'Replace engine air filter',
-                'vehicle_id': ObjectId(vehicle_id)
-            },
-            {
-                'name': 'Cabin Air Filter',
-                'category': 'Interior',
-                'interval_km': 40000,
-                'description': 'Replace cabin air filter',
-                'vehicle_id': ObjectId(vehicle_id)
-            },
-            {
-                'name': 'Brake Fluid',
-                'category': 'Brakes',
-                'interval_km': 40000,
-                'description': 'Replace brake fluid',
-                'vehicle_id': ObjectId(vehicle_id)
-            },
-            {
-                'name': 'Tire Rotation',
-                'category': 'Tires',
-                'interval_km': 8000,
-                'description': 'Rotate tires for even wear',
-                'vehicle_id': ObjectId(vehicle_id)
-            },
-            {
-                'name': 'Spark Plugs',
-                'category': 'Engine',
-                'interval_km': 120000,
-                'description': 'Replace spark plugs',
-                'vehicle_id': ObjectId(vehicle_id)
-            },
-            {
-                'name': 'Coolant Level Check',
-                'category': 'Cooling System',
-                'interval_km': 8000,
-                'description': 'Check coolant level and condition',
-                'vehicle_id': ObjectId(vehicle_id)
-            }
-        ]
+            })
         
         result = db.maintenance_items.insert_many(default_items)
         return [str(id) for id in result.inserted_ids]
+    
+    @staticmethod
+    def should_create_mazda_schedule(vehicle_data):
+        # Check if vehicle is Mazda CX-5 2014-2017
+        make = vehicle_data.get('make', '').lower()
+        model = vehicle_data.get('model', '').lower()
+        year = vehicle_data.get('year')
+        
+        return (make == 'mazda' and 
+                'cx-5' in model and 
+                year and 
+                2014 <= year <= 2017)
 
 class ServiceRecord:
     @staticmethod

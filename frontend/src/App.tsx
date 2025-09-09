@@ -5,6 +5,7 @@ import { ServiceHistory } from './pages/ServiceHistory'
 import { ServiceSchedulerPage } from './pages/ServiceScheduler'
 import { Settings } from './pages/Settings'
 import { Button } from './components/ui/button'
+import { ToastProvider, ToastContainer } from './components/ui/toast'
 import { Car, Settings as SettingsIcon, History, Calendar } from 'lucide-react'
 
 function Navigation() {
@@ -62,18 +63,21 @@ function Navigation() {
 
 function App() {
   return (
-    <Router>
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/vehicles" element={<Vehicles />} />
-          <Route path="/services" element={<ServiceHistory />} />
-          <Route path="/scheduler" element={<ServiceSchedulerPage />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </div>
-    </Router>
+    <ToastProvider>
+      <Router>
+        <div className="min-h-screen bg-background">
+          <Navigation />
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/vehicles" element={<Vehicles />} />
+            <Route path="/services" element={<ServiceHistory />} />
+            <Route path="/scheduler" element={<ServiceSchedulerPage />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+          <ToastContainer />
+        </div>
+      </Router>
+    </ToastProvider>
   )
 }
 
