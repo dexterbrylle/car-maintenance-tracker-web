@@ -4,10 +4,11 @@ services:
   backend:
     build: ./backend
     ports:
-      - "5000:5000"
+      - "8242:5000"
     environment:
-      - MONGODB_URI=mongodb://mongodb:27017/maintenance_tracker
+      - MONGODB_URI=mongodb://mongodb:27017/maintenance_tracker_prod
       - FLASK_ENV=production
+      - PORT=5000
     depends_on:
       - mongodb
     restart: unless-stopped
@@ -15,15 +16,17 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "80:80"
+      - "8241:80"
+    environment:
+      - VITE_API_URL=http://backend:5000
     depends_on:
       - backend
     restart: unless-stopped
 
   mongodb:
-    image: mongo:7
+    image: mongo:4.4
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongodb_data:/data/db
     restart: unless-stopped
