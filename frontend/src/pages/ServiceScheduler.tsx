@@ -8,7 +8,7 @@ import { QuickServiceModal } from "@/components/QuickServiceModal"
 import { useToast } from "@/components/ui/toast"
 import { Vehicle } from "@/types"
 import { api } from "@/lib/api"
-import { Calendar, Clock, CheckCircle, AlertTriangle, Wrench, Filter } from "lucide-react"
+import { Calendar, Clock, CheckCircle, AlertTriangle, Wrench } from "lucide-react"
 
 interface MaintenanceScheduleItem {
   _id: string
@@ -23,6 +23,7 @@ interface MaintenanceScheduleItem {
   next_due_mileage: number
   miles_until_due: number
   service_count: number
+  vehicle_id: string
 }
 
 interface ScheduleResponse {
@@ -149,26 +150,11 @@ export function ServiceSchedulerPage() {
     })
   }
 
-  const getFilteredItems = () => {
-    if (!scheduleData) return []
-    
-    let allItems: MaintenanceScheduleItem[] = []
-    Object.values(scheduleData.categories).forEach(categoryItems => {
-      allItems = [...allItems, ...categoryItems]
-    })
-    
-    return allItems.filter(item => {
-      const statusMatch = filterStatus === "all" || item.status === filterStatus
-      const categoryMatch = filterCategory === "all" || item.category === filterCategory
-      return statusMatch && categoryMatch
-    })
-  }
-
+  
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 
-  const filteredItems = getFilteredItems()
   const categories = scheduleData ? Object.keys(scheduleData.categories) : []
 
   return (
@@ -374,7 +360,15 @@ export function ServiceSchedulerPage() {
           <QuickServiceModal
             isOpen={showQuickService}
             maintenanceItem={selectedItem}
-            vehicle={scheduleData.vehicle}
+            vehicle={{
+              _id: scheduleData.vehicle.id,
+              make: scheduleData.vehicle.make,
+              model: scheduleData.vehicle.model,
+              year: scheduleData.vehicle.year,
+              current_mileage: scheduleData.vehicle.current_mileage,
+              purchase_mileage: 0,
+              created_at: new Date().toISOString()
+            }}
             onSuccess={handleServiceComplete}
             onClose={() => {
               setShowQuickService(false)
