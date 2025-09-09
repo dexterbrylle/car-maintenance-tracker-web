@@ -12,10 +12,15 @@ import { ServiceScheduler } from "@/components/ServiceScheduler"
 import { MaintenanceInsights } from "@/components/MaintenanceInsights"
 import { FuelPerformanceMetrics } from "@/components/FuelPerformanceMetrics"
 import { ExportButton } from "@/components/ExportButton"
+import { StatsCard } from "@/components/StatsCard"
+import { AddFillupModal } from "@/components/AddFillupModal"
+import { RecentFillups } from "@/components/RecentFillups"
+import { InsightsSection } from "@/components/InsightsSection"
 import { DashboardSkeleton, VehicleSelectorSkeleton } from "@/components/ui/skeleton"
 import { Vehicle, DashboardData, MaintenanceItem, ServiceRecord } from "@/types"
 import { api } from "@/lib/api"
-import { Car, Plus, Calendar, Clock, AlertTriangle, CheckCircle, TrendingUp, Loader2 } from "lucide-react"
+import { Car, Plus, Calendar, Clock, AlertTriangle, CheckCircle, TrendingUp, Loader2, Fuel, Calculator, Wrench } from "lucide-react"
+import { FloatingActionButton } from "@/components/mobile"
 
 export function Dashboard() {
   const [vehicles, setVehicles] = useState<Vehicle[] | null>(null)
@@ -30,6 +35,7 @@ export function Dashboard() {
   const [showScheduler, setShowScheduler] = useState(false)
   const [selectedMaintenanceItem, setSelectedMaintenanceItem] = useState<MaintenanceItem | null>(null)
   const [showQuickServiceModal, setShowQuickServiceModal] = useState(false)
+  const [showAddFillup, setShowAddFillup] = useState(false)
   const { addToast } = useToast()
 
   // Memoized calculations
@@ -37,6 +43,17 @@ export function Dashboard() {
     dashboardData?.vehicle || (vehicles && vehicles.find(v => v._id === selectedVehicleId)), 
     [dashboardData, vehicles, selectedVehicleId]
   )
+
+  const calculateTrend = (fuelPerformance: any) => {
+    if (!fuelPerformance || !fuelPerformance.avg_fuel_economy || !fuelPerformance.current_economy) {
+      return 'neutral'
+    }
+    
+    const trend = ((fuelPerformance.current_economy - fuelPerformance.avg_fuel_economy) / fuelPerformance.avg_fuel_economy) * 100
+    if (trend > 5) return 'up'
+    if (trend < -5) return 'down'
+    return 'neutral'
+  }
 
   // const totalCost = useMemo(() => 
   //   serviceRecords.reduce((sum, record) => sum + record.cost, 0), 
@@ -179,6 +196,14 @@ export function Dashboard() {
     handleServiceComplete()
   }, [handleServiceComplete])
 
+  const handleFillupSuccess = useCallback(() => {
+    // Refresh dashboard data
+    if (selectedVehicleId) {
+      api.getDashboard(selectedVehicleId).then(setDashboardData)
+    }
+    setShowAddFillup(false)
+  }, [selectedVehicleId])
+
   if (loading) {
     return <DashboardSkeleton />
   }
@@ -305,151 +330,159 @@ export function Dashboard() {
             <FuelPerformanceMetrics vehicleId={selectedVehicleId} />
           )}
 
-          {/* AI Insights Section */}
+          {/* Enhanced Insights Section */}
           {selectedVehicle && dashboardData && dashboardData.insights && dashboardData.insights.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  AI-Powered Insights
-                </CardTitle>
-                <CardDescription>
-                  Intelligent analysis of your vehicle's maintenance and fuel data
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {dashboardData.insights.map((insight, index) => (
-                    <div key={index} className="p-4 bg-muted rounded-lg">
-                      <h4 className="font-semibold mb-2">{insight.title || insight.type}</h4>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {insight.message || insight.description}
-                      </p>
-                      {insight.recommendation && (
-                        <p className="text-sm font-medium text-blue-600">
-                          Recommendation: {insight.recommendation}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <InsightsSection insights={dashboardData.insights} />
           )}
 
-          {/* Overview Section */}
+          {/* Recent Fill-ups */}
           {selectedVehicle && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  Maintenance Overview
-                </CardTitle>
-                <CardDescription>
-                  Quick summary of your vehicle's maintenance status
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {dashboardLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading maintenance data...
-                    </div>
-                  </div>
-                ) : error ? (
-                  <div className="text-center py-8">
-                    <p className="text-red-500 mb-4">{error}</p>
-                    <Button onClick={() => {
-                      // Reload vehicle data
-                      if (selectedVehicleId) {
-                        setDashboardLoading(true)
-                        api.getDashboard(selectedVehicleId)
-                          .then(setDashboardData)
-                          .catch(() => setError('Failed to load vehicle data'))
-                          .finally(() => setDashboardLoading(false))
-                      }
-                    }} variant="outline" size="sm">
-                      Try Again
-                    </Button>
-                  </div>
-                ) : dashboardData ? (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
-                        <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                        <div className="text-2xl font-bold text-green-600">
-                          {dashboardData.maintenance.ok.length}
-                        </div>
-                        <div className="text-sm text-green-700">Up to Date</div>
-                      </div>
-                      <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                        <Clock className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
-                        <div className="text-2xl font-bold text-yellow-600">
-                          {dashboardData.maintenance.due_soon.length}
-                        </div>
-                        <div className="text-sm text-yellow-700">Due Soon</div>
-                      </div>
-                      <div className="text-center p-4 bg-red-50 rounded-lg border border-red-200">
-                        <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
-                        <div className="text-2xl font-bold text-red-600">
-                          {dashboardData.maintenance.due_now.length}
-                        </div>
-                        <div className="text-sm text-red-700">Due Now</div>
-                      </div>
-                      <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
-                        <Calendar className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                        <div className="text-2xl font-bold text-blue-600">
-                          {Array.isArray(serviceRecords) ? serviceRecords.length : 0}
-                        </div>
-                        <div className="text-sm text-blue-700">Services Logged</div>
-                      </div>
-                    </div>
+            <RecentFillups vehicleId={selectedVehicleId} />
+          )}
 
-                    {/* Recent Services */}
-                    {Array.isArray(serviceRecords) && serviceRecords.length > 0 && (
-                      <div className="mt-6">
-                        <h3 className="font-semibold mb-3">Recent Services</h3>
-                        <div className="space-y-2">
-                          {serviceRecords.slice(0, 3).map((service) => {
-                            const maintenanceItem = Array.isArray(maintenanceItems) ? maintenanceItems.find(mi => mi._id === service.maintenance_item_id) : null
-                            return (
-                              <div key={service._id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                                <div>
-                                  <div className="font-medium">{maintenanceItem?.name || 'Unknown Service'}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {new Date(service.date).toLocaleDateString()} • {service.mileage.toLocaleString()} km
-                                  </div>
-                                </div>
-                                <Badge variant="outline">
-                                  ${service.cost.toFixed(2)}
-                                </Badge>
-                              </div>
-                            )
-                          })}
+          {/* Enhanced Overview Section with Fuel Stats */}
+          {selectedVehicle && (
+            <div className="space-y-6">
+              {/* Stats Cards Grid - Mobile Responsive */}
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <StatsCard
+                  title="Fuel Economy"
+                  value={`${dashboardData?.fuel_performance?.avg_fuel_economy ? dashboardData.fuel_performance.avg_fuel_economy.toFixed(1) : '--'} km/L`}
+                  subtitle={dashboardData?.fuel_performance?.avg_fuel_economy ? `Avg: ${dashboardData.fuel_performance.avg_fuel_economy.toFixed(1)} km/L` : 'No data'}
+                  trend={dashboardData?.fuel_performance ? calculateTrend(dashboardData.fuel_performance) : undefined}
+                  icon={<Fuel className="h-4 w-4" />}
+                />
+                <StatsCard
+                  title="Cost/KM"
+                  value={`₱${dashboardData?.fuel_performance?.avg_cost_per_km ? dashboardData.fuel_performance.avg_cost_per_km.toFixed(2) : '--'}`}
+                  subtitle="Current rate"
+                  icon={<Calculator className="h-4 w-4" />}
+                />
+                <StatsCard
+                  title="Due Soon"
+                  value={`${dashboardData?.maintenance?.due_soon?.length || 0} items`}
+                  subtitle="Maintenance"
+                  icon={<Wrench className="h-4 w-4" />}
+                />
+                <StatsCard
+                  title="This Month"
+                  value={`₱${dashboardData?.fuel_performance?.monthly_fuel_cost?.[0]?.total_cost?.toFixed(2) || '--'}`}
+                  subtitle="Fuel cost"
+                  icon={<TrendingUp className="h-4 w-4" />}
+                />
+              </div>
+
+              {/* Maintenance Overview Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5" />
+                    Maintenance Overview
+                  </CardTitle>
+                  <CardDescription>
+                    Quick summary of your vehicle's maintenance status
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {dashboardLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading maintenance data...
+                      </div>
+                    </div>
+                  ) : error ? (
+                    <div className="text-center py-8">
+                      <p className="text-red-500 mb-4">{error}</p>
+                      <Button onClick={() => {
+                        if (selectedVehicleId) {
+                          setDashboardLoading(true)
+                          api.getDashboard(selectedVehicleId)
+                            .then(setDashboardData)
+                            .catch(() => setError('Failed to load vehicle data'))
+                            .finally(() => setDashboardLoading(false))
+                        }
+                      }} variant="outline" size="sm">
+                        Try Again
+                      </Button>
+                    </div>
+                  ) : dashboardData ? (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                          <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                          <div className="text-2xl font-bold text-green-600">
+                            {dashboardData.maintenance.ok.length}
+                          </div>
+                          <div className="text-sm text-green-700">Up to Date</div>
+                        </div>
+                        <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                          <Clock className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
+                          <div className="text-2xl font-bold text-yellow-600">
+                            {dashboardData.maintenance.due_soon.length}
+                          </div>
+                          <div className="text-sm text-yellow-700">Due Soon</div>
+                        </div>
+                        <div className="text-center p-4 bg-red-50 rounded-lg border border-red-200">
+                          <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
+                          <div className="text-2xl font-bold text-red-600">
+                            {dashboardData.maintenance.due_now.length}
+                          </div>
+                          <div className="text-sm text-red-700">Due Now</div>
+                        </div>
+                        <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <Calendar className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                          <div className="text-2xl font-bold text-blue-600">
+                            {Array.isArray(serviceRecords) ? serviceRecords.length : 0}
+                          </div>
+                          <div className="text-sm text-blue-700">Services Logged</div>
                         </div>
                       </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground mb-4">No maintenance data available</p>
-                    <Button onClick={() => {
-                      // Reload dashboard data
-                      if (selectedVehicleId) {
-                        setDashboardLoading(true)
-                        api.getDashboard(selectedVehicleId)
-                          .then(setDashboardData)
-                          .catch(() => setError('Failed to load vehicle data'))
-                          .finally(() => setDashboardLoading(false))
-                      }
-                    }} variant="outline" size="sm">
-                      Load Data
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+
+                      {/* Recent Services */}
+                      {Array.isArray(serviceRecords) && serviceRecords.length > 0 && (
+                        <div className="mt-6">
+                          <h3 className="font-semibold mb-3">Recent Services</h3>
+                          <div className="space-y-2">
+                            {serviceRecords.slice(0, 3).map((service) => {
+                              const maintenanceItem = Array.isArray(maintenanceItems) ? maintenanceItems.find(mi => mi._id === service.maintenance_item_id) : null
+                              return (
+                                <div key={service._id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                                  <div>
+                                    <div className="font-medium">{maintenanceItem?.name || 'Unknown Service'}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {new Date(service.date).toLocaleDateString()} • {service.mileage.toLocaleString()} km
+                                    </div>
+                                  </div>
+                                  <Badge variant="outline">
+                                    ${service.cost.toFixed(2)}
+                                  </Badge>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground mb-4">No maintenance data available</p>
+                      <Button onClick={() => {
+                        if (selectedVehicleId) {
+                          setDashboardLoading(true)
+                          api.getDashboard(selectedVehicleId)
+                            .then(setDashboardData)
+                            .catch(() => setError('Failed to load vehicle data'))
+                            .finally(() => setDashboardLoading(false))
+                        }
+                      }} variant="outline" size="sm">
+                        Load Data
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
 
@@ -545,6 +578,35 @@ export function Dashboard() {
             vehicle={selectedVehicle}
             onSuccess={handleQuickServiceComplete}
           />
+        )}
+
+        {/* Add Fill-up Modal */}
+        {selectedVehicle && (
+          <AddFillupModal
+            isOpen={showAddFillup}
+            onClose={() => setShowAddFillup(false)}
+            vehicleId={selectedVehicleId}
+            currentMileage={selectedVehicle.current_mileage}
+            onSuccess={handleFillupSuccess}
+          />
+        )}
+
+        {/* Floating Action Buttons - Mobile */}
+        {selectedVehicle && (
+          <div className="fixed bottom-6 right-6 flex flex-col gap-3 md:hidden">
+            <FloatingActionButton
+              icon={<Plus />}
+              onClick={() => setShowAddFillup(true)}
+              label="Add Fill-up"
+              color="blue"
+            />
+            <FloatingActionButton
+              icon={<Wrench />}
+              onClick={() => setShowServiceForm(true)}
+              label="Log Service"
+              color="green"
+            />
+          </div>
         )}
       </div>
     </div>

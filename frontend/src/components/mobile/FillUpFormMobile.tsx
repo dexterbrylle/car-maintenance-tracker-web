@@ -50,10 +50,9 @@ export const FillUpFormMobile: React.FC<FillUpFormMobileProps> = ({
   useEffect(() => {
     const fetchLastOdometer = async () => {
       try {
-        const response = await api.getFuelRecords(vehicleId);
-        const records = response.data;
+        const records = await api.getFuelRecords(vehicleId);
         if (records.length > 0) {
-          const sortedRecords = records.sort((a, b) => 
+          const sortedRecords = records.sort((a: FuelRecord, b: FuelRecord) => 
             new Date(b.date).getTime() - new Date(a.date).getTime()
           );
           setLastOdometerReading(sortedRecords[0].odometer_km);
@@ -171,8 +170,8 @@ export const FillUpFormMobile: React.FC<FillUpFormMobileProps> = ({
 
       // Update vehicle mileage if the new odometer is higher
       try {
-        const vehiclesResponse = await api.getVehicles();
-        const currentVehicle = vehiclesResponse.data.find((v: Vehicle) => v._id === vehicleId);
+        const vehicles = await api.getVehicles();
+        const currentVehicle = vehicles.find((v: Vehicle) => v._id === vehicleId);
         if (currentVehicle && fuelData.odometer > currentVehicle.current_mileage) {
           await api.updateVehicle(vehicleId, { current_mileage: fuelData.odometer });
         }

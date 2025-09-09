@@ -24,7 +24,7 @@ function RouteLoading() {
 import { Button } from './components/ui/button'
 import { ToastProvider, ToastContainer } from './components/ui/toast'
 import { Car, Settings as SettingsIcon, History, Calendar, Download, Fuel } from 'lucide-react'
-import { BottomNavigation, FloatingActionButton } from './components/mobile'
+import { BottomNavigation } from './components/mobile'
 
 function Navigation() {
   return (
@@ -98,21 +98,6 @@ function Navigation() {
 }
 
 function App() {
-  const handleLogService = () => {
-    // Navigate to service logging or open modal
-    // This will be handled by individual pages
-  }
-
-  const handleUpdateMileage = () => {
-    // Navigate to mileage update or open modal
-    // This will be handled by individual pages
-  }
-
-  const handleScheduleService = () => {
-    // Navigate to service scheduling
-    // This will be handled by individual pages
-  }
-
   return (
     <ToastProvider>
       <Router>
@@ -157,11 +142,6 @@ function App() {
 
           {/* Mobile Navigation */}
           <BottomNavigation />
-          <FloatingActionButton
-            onLogService={handleLogService}
-            onUpdateMileage={handleUpdateMileage}
-            onScheduleService={handleScheduleService}
-          />
         </div>
       </Router>
     </ToastProvider>

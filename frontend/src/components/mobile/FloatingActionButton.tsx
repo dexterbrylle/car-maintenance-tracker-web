@@ -1,38 +1,45 @@
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import React from "react"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
-interface FloatingActionButtonProps {
-  onLogService: () => void;
-  onUpdateMileage: () => void;
-  onScheduleService: () => void;
-  className?: string;
+export interface FloatingActionButtonProps {
+  icon: React.ReactNode
+  onClick: () => void
+  label: string
+  color?: 'blue' | 'green' | 'red'
+  className?: string
 }
 
-export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
-  onLogService,
-  onUpdateMileage,
-  onScheduleService,
-  className
-}) => {
-  // Prevent unused variable warnings
-  void onUpdateMileage;
-  void onScheduleService;
-  return (
-    <div className={cn(
-      'fixed bottom-20 right-4 z-40',
-      'md:hidden', // Only show on mobile
-      className
-    )}>
-      <Button
-        size="lg"
-        className="w-14 h-14 rounded-full shadow-lg"
-        onClick={onLogService}
-      >
-        <div className="w-6 h-6 bg-white rounded" />
-      </Button>
-    </div>
-  );
-};
+export function FloatingActionButton({ 
+  icon, 
+  onClick, 
+  label, 
+  color = 'blue',
+  className 
+}: FloatingActionButtonProps) {
+  const colorClasses = {
+    blue: 'bg-blue-600 hover:bg-blue-700',
+    green: 'bg-green-600 hover:bg-green-700',
+    red: 'bg-red-600 hover:bg-red-700'
+  }
 
-export default FloatingActionButton;
+  return (
+    <Button
+      onClick={onClick}
+      className={cn(
+        `
+          h-14 w-14 rounded-full shadow-lg transition-all hover:shadow-xl
+          ${colorClasses[color]}
+          md:hidden
+        `,
+        className
+      )}
+      size="icon"
+      title={label}
+    >
+      {icon}
+    </Button>
+  )
+}
+
+export default FloatingActionButton

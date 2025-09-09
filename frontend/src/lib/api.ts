@@ -65,7 +65,7 @@ export const api = {
   addVehicle: async (data: Partial<Vehicle>) => {
     const result = await axiosInstance.post<{ id: string; message: string }>(`${API_BASE}/vehicles`, data);
     // Invalidate vehicles cache after adding
-    invalidateVehicleCache(data.vehicle_id || '');
+    invalidateVehicleCache(result.data.id || '');
     return result.data;
   },
   
@@ -199,6 +199,18 @@ export const api = {
   // Fuel Maintenance Insights
   getFuelMaintenanceInsights: (vehicleId: string) =>
     axiosInstance.get<FuelMaintenanceInsightsData>(`${API_BASE}/dashboard/${vehicleId}/insights`),
+  
+  // Recent fill-ups for dashboard
+  getRecentFillups: (vehicleId: string, limit = 5) =>
+    axiosInstance.get<FuelRecord[]>(`${API_BASE}/fillups/${vehicleId}?limit=${limit}`),
+  
+  // Enhanced dashboard with fuel data
+  getEnhancedDashboard: (vehicleId: string) => cachedFetch(
+    CACHE_KEYS.DASHBOARD_DATA(vehicleId),
+    () => axiosInstance.get<DashboardData>(`${API_BASE}/dashboard/${vehicleId}`).then(res => res.data),
+    CACHE_EXPIRY.DASHBOARD_DATA,
+    true // Use memory cache for frequent access
+  ),
 };
 
 // Debounced search functions

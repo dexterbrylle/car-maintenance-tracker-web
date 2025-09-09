@@ -51,7 +51,6 @@ export const ServiceFormMobile: React.FC<ServiceFormMobileProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState("");
-  const [showAllItems, setShowAllItems] = useState(false);
 
   // Filter maintenance items based on search term
   const filteredItems = maintenanceItems.filter(item =>
@@ -143,8 +142,8 @@ export const ServiceFormMobile: React.FC<ServiceFormMobileProps> = ({
 
       // Update vehicle mileage if the new mileage is higher
       try {
-        const vehiclesResponse = await api.getVehicles();
-        const currentVehicle = vehiclesResponse.data.find((v: any) => v._id === vehicleId);
+        const vehicles = await api.getVehicles();
+        const currentVehicle = vehicles.find((v: any) => v._id === vehicleId);
         if (currentVehicle && serviceData.mileage > currentVehicle.current_mileage) {
           await api.updateVehicle(vehicleId, { current_mileage: serviceData.mileage });
         }

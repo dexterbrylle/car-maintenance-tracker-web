@@ -35,8 +35,8 @@ export function FuelPerformanceMetrics({ vehicleId, className = "" }: FuelPerfor
     setLoading(true)
     setError(null)
     try {
-      const response = await api.getFuelPerformanceMetrics(vehicleId)
-      setMetrics(response.data)
+      const metrics = await api.getFuelPerformanceMetrics(vehicleId)
+      setMetrics(metrics)
     } catch (err) {
       setError('Failed to load fuel performance metrics')
     } finally {
