@@ -100,7 +100,10 @@ function Navigation() {
 function App() {
   return (
     <ToastProvider>
-      <Router>
+      <Router future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true
+      }}>
         <div className="min-h-screen bg-background">
           <Navigation />
           <main className="pb-20 md:pb-0">

@@ -4,12 +4,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FuelMaintenanceInsightsData } from "@/types"
 import { api } from "@/lib/api"
-import { 
-  Fuel, 
-  TrendingUp, 
-  TrendingDown, 
-  AlertTriangle, 
-  CheckCircle, 
+import {
+  Fuel,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  CheckCircle,
   Info,
   RefreshCw,
   Zap,
@@ -115,7 +115,7 @@ export function FuelMaintenanceInsights({ vehicleId, className = "" }: FuelMaint
 
   const formatCurrency = (amount: number) => `₱${amount.toLocaleString()}`
 
-  
+
   // Loading state
   if (loading) {
     return (
@@ -144,7 +144,7 @@ export function FuelMaintenanceInsights({ vehicleId, className = "" }: FuelMaint
                 </div>
               ))}
             </div>
-            
+
             {/* Skeleton for predictions */}
             <div className="space-y-3">
               <div className="h-4 bg-gray-300 rounded w-1/4"></div>

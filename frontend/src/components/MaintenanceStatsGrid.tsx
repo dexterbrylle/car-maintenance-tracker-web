@@ -1,3 +1,4 @@
+import React from "react"
 import { DollarSign, Calendar, CheckCircle2, Wrench } from "lucide-react"
 
 interface MaintenanceStatsGridProps {
@@ -60,11 +61,11 @@ interface MaintenanceStatCardProps {
 function MaintenanceStatCard({ label, value, icon: Icon, variant }: MaintenanceStatCardProps) {
   const variants = {
     primary: {
-      bg: "bg-green-50",
-      border: "border-green-100",
-      icon: "text-green-600",
-      text: "text-green-900",
-      value: "text-green-700",
+      bg: "bg-emerald-50",
+      border: "border-emerald-100",
+      icon: "text-emerald-600",
+      text: "text-emerald-900",
+      value: "text-emerald-700",
     },
   }
 

@@ -147,8 +147,17 @@ def get_fuel_stats(vehicle_id):
     try:
         stats = FillUp.get_fuel_stats(vehicle_id)
         
+        # If no stats exist, return default/empty values instead of 404
         if not stats:
-            return jsonify({'error': 'No fuel data found for this vehicle'}), 404
+            stats = {
+                'avg_fuel_economy': None,
+                'best_fuel_economy': None,
+                'worst_fuel_economy': None,
+                'avg_cost_per_km': None,
+                'total_fuel_cost_ytd': 0,
+                'total_fillups': 0,
+                'last_fillup_date': None
+            }
         
         # Calculate monthly fuel cost
         monthly_cost = calculate_monthly_fuel_cost(vehicle_id)

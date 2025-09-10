@@ -152,7 +152,7 @@ export function FuelPerformanceMetrics({ vehicleId, className = "" }: FuelPerfor
         <Fuel className="h-5 w-5 text-slate-700" />
         <h3 className="text-lg font-semibold text-slate-900">Fuel Performance</h3>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
           {/* Average Fuel Economy */}
           <div className="status-neutral p-6">
             <div className="flex items-center justify-between mb-4">
@@ -219,7 +219,7 @@ export function FuelPerformanceMetrics({ vehicleId, className = "" }: FuelPerfor
 
         {/* Best/Worst Performance */}
         {(metrics.best_fuel_economy || metrics.worst_fuel_economy) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-2 gap-6 mb-6">
             {metrics.best_fuel_economy && (
               <div className="status-success p-4">
                 <div className="flex items-center justify-between">
@@ -276,8 +276,8 @@ export function FuelPerformanceMetrics({ vehicleId, className = "" }: FuelPerfor
           </div>
         )}
 
-        {/* Performance Insights */}
-        <div className="mt-4 p-4 bg-muted rounded-lg">
+        {/* Performance Insights - Hidden for now */}
+        {/* <div className="mt-4 p-4 bg-muted rounded-lg">
           <h3 className="font-semibold mb-2">Performance Insights</h3>
           <div className="space-y-1 text-sm text-muted-foreground">
             {metrics.avg_fuel_economy && metrics.avg_fuel_economy >= 12 && (
@@ -307,7 +307,7 @@ export function FuelPerformanceMetrics({ vehicleId, className = "" }: FuelPerfor
               </div>
             )}
           </div>
-        </div>
+        </div> */}
     </div>
   )
 }

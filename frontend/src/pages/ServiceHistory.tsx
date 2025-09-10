@@ -225,16 +225,16 @@ export function ServiceHistory() {
         </div>
 
         <div className="grid gap-6 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {vehicles.length === 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>No Vehicles</CardTitle>
-                  <CardDescription>Add a vehicle first</CardDescription>
-                </CardHeader>
-              </Card>
-            ) : (
-              <>
+          {vehicles.length === 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>No Vehicles</CardTitle>
+                <CardDescription>Add a vehicle first</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4">
                 <Card>
                   <CardHeader>
                     <CardTitle>Vehicle</CardTitle>
@@ -248,20 +248,18 @@ export function ServiceHistory() {
                     />
                   </CardContent>
                 </Card>
+              </div>
 
-                {selectedVehicle && (
-                  <>
-                    <MaintenanceStatsGrid
-                      totalCost={totalCost}
-                      serviceCount={serviceRecords.length}
-                      filteredRecordsCount={filteredRecords.length}
-                      maintenanceItemsCount={maintenanceItems.length}
-                    />
-                  </>
-                )}
-              </>
-            )}
-          </div>
+              {selectedVehicle && (
+                <MaintenanceStatsGrid
+                  totalCost={totalCost}
+                  serviceCount={serviceRecords.length}
+                  filteredRecordsCount={filteredRecords.length}
+                  maintenanceItemsCount={maintenanceItems.length}
+                />
+              )}
+            </>
+          )}
 
           {showServiceForm && selectedVehicleId && (
             <ServiceForm

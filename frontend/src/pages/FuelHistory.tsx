@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { VehicleSelector } from "@/components/VehicleSelector"
 import { FillUpForm } from "@/components/FillUpForm"
-import { FuelPerformanceMetrics } from "@/components/FuelPerformanceMetrics"
 import { FuelStatsGrid } from "@/components/FuelStatsGrid"
 import { ExportButton } from "@/components/ExportButton"
 import { VirtualTable } from "@/components/ui/virtual-table"
@@ -43,7 +42,6 @@ export function FuelHistory() {
   const [dateFilter, setDateFilter] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [searchResults, setSearchResults] = useState<FuelRecord[]>([])
-  const [performanceMetrics, setPerformanceMetrics] = useState<FuelPerformanceMetricsType | null>(null)
 
   // Memoized calculations
   const selectedVehicle = useMemo(() => 
@@ -52,18 +50,18 @@ export function FuelHistory() {
   )
 
   const totalCost = useMemo(() => 
-    fuelRecords.reduce((sum, record) => sum + record.total_cost, 0), 
+    Array.isArray(fuelRecords) ? fuelRecords.reduce((sum, record) => sum + record.total_cost, 0) : 0, 
     [fuelRecords]
   )
 
   const totalDistance = useMemo(() => 
-    fuelRecords.length > 1 ? 
+    Array.isArray(fuelRecords) && fuelRecords.length > 1 ? 
       Math.max(...fuelRecords.map(r => r.odometer_km)) - Math.min(...fuelRecords.map(r => r.odometer_km)) : 0, 
     [fuelRecords]
   )
 
   const totalLiters = useMemo(() => 
-    fuelRecords.reduce((sum, record) => sum + record.liters, 0), 
+    Array.isArray(fuelRecords) ? fuelRecords.reduce((sum, record) => sum + record.liters, 0) : 0, 
     [fuelRecords]
   )
 
@@ -110,13 +108,8 @@ export function FuelHistory() {
       setDataLoading(true)
 
       try {
-        const [fuelResponse, metricsResponse] = await Promise.all([
-          api.getFuelRecords(selectedVehicleId),
-          api.getFuelPerformanceMetrics(selectedVehicleId)
-        ])
-
-        setFuelRecords(fuelResponse)
-        setPerformanceMetrics(metricsResponse)
+        const fuelResponse = await api.getFuelRecords(selectedVehicleId)
+        setFuelRecords(Array.isArray(fuelResponse) ? fuelResponse : [])
       } catch (error) {
         console.error('Failed to load vehicle data:', error)
         addToast({
@@ -148,7 +141,6 @@ export function FuelHistory() {
   const handleFillUpComplete = useCallback(() => {
     if (selectedVehicleId) {
       api.getFuelRecords(selectedVehicleId).then(setFuelRecords)
-      api.getFuelPerformanceMetrics(selectedVehicleId).then(setPerformanceMetrics)
     }
     setShowFillUpForm(false)
     addToast({
@@ -170,12 +162,8 @@ export function FuelHistory() {
       
       // Refresh data
       if (selectedVehicleId) {
-        const [fuelResponse, metricsResponse] = await Promise.all([
-          api.getFuelRecords(selectedVehicleId),
-          api.getFuelPerformanceMetrics(selectedVehicleId)
-        ])
-        setFuelRecords(fuelResponse)
-        setPerformanceMetrics(metricsResponse)
+        const fuelResponse = await api.getFuelRecords(selectedVehicleId)
+        setFuelRecords(Array.isArray(fuelResponse) ? fuelResponse : [])
       }
 
       addToast({
@@ -247,53 +235,44 @@ export function FuelHistory() {
         </div>
 
         <div className="grid gap-6 mb-8">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            {vehicles.length === 0 ? (
-              <Card className="lg:col-span-5">
+          {vehicles.length === 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>No Vehicles</CardTitle>
+                <CardDescription>Add a vehicle first</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            <>
+              {/* Vehicle Selector */}
+              <Card>
                 <CardHeader>
-                  <CardTitle>No Vehicles</CardTitle>
-                  <CardDescription>Add a vehicle first</CardDescription>
+                  <CardTitle>Vehicle</CardTitle>
+                  <CardDescription>Select vehicle to view history</CardDescription>
                 </CardHeader>
-              </Card>
-            ) : (
-              <>
-                {/* Vehicle Selector */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Vehicle</CardTitle>
-                    <CardDescription>Select vehicle to view history</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {dataLoading ? (
-                      <VehicleSelectorSkeleton />
-                    ) : (
-                      <VehicleSelector
-                        vehicles={vehicles}
-                        selectedVehicleId={selectedVehicleId}
-                        onVehicleChange={setSelectedVehicleId}
-                      />
-                    )}
-                  </CardContent>
-                </Card>
-
-                {selectedVehicle && (
-                  <>
-                    {/* Stats Grid */}
-                    <FuelStatsGrid
-                      totalCost={totalCost}
-                      totalDistance={totalDistance}
-                      avgFuelEconomy={avgFuelEconomy}
-                      avgCostPerKm={avgCostPerKm}
+                <CardContent>
+                  {dataLoading ? (
+                    <VehicleSelectorSkeleton />
+                  ) : (
+                    <VehicleSelector
+                      vehicles={vehicles}
+                      selectedVehicleId={selectedVehicleId}
+                      onVehicleChange={setSelectedVehicleId}
                     />
-                  </>
-                )}
-              </>
-            )}
-          </div>
+                  )}
+                </CardContent>
+              </Card>
 
-          {/* Performance Metrics */}
-          {selectedVehicleId && performanceMetrics && (
-            <FuelPerformanceMetrics vehicleId={selectedVehicleId} />
+              {/* Stats Grid - Only show when vehicle is selected */}
+              {selectedVehicle && (
+                <FuelStatsGrid
+                  totalCost={totalCost}
+                  totalDistance={totalDistance}
+                  avgFuelEconomy={avgFuelEconomy}
+                  avgCostPerKm={avgCostPerKm}
+                />
+              )}
+            </>
           )}
 
           {/* Charts Section */}

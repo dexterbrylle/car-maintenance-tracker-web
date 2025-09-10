@@ -1,4 +1,6 @@
+import React from "react"
 import { DollarSign, Gauge, Fuel, Calculator } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
 
 interface FuelStatsGridProps {
   totalCost: number
@@ -36,7 +38,7 @@ export function FuelStatsGrid({ totalCost, totalDistance, avgFuelEconomy, avgCos
   ]
 
   return (
-    <div className="grid gap-6 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
       {stats.map((stat) => (
         <FuelStatCard
           key={stat.label}
@@ -71,14 +73,16 @@ function FuelStatCard({ label, value, icon: Icon, variant }: FuelStatCardProps) 
   const style = variants[variant]
 
   return (
-    <div className={`premium-card p-6 ${style.bg} ${style.border}`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className={`text-sm font-medium ${style.text}`}>{label}</p>
-          <p className={`mt-1 text-3xl font-bold ${style.value}`}>{value}</p>
+    <Card className={`${style.bg} ${style.border} border-2`}>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className={`text-sm font-medium ${style.text}`}>{label}</p>
+            <p className={`mt-1 text-3xl font-bold ${style.value}`}>{value}</p>
+          </div>
+          <Icon className={`h-8 w-8 ${style.icon}`} />
         </div>
-        <Icon className={`h-8 w-8 ${style.icon}`} />
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
