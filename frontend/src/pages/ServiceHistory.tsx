@@ -10,7 +10,8 @@ import { ExportButton } from "@/components/ExportButton"
 import { useToast } from "@/components/ui/toast"
 import { Vehicle, ServiceRecord, MaintenanceItem } from "@/types"
 import { api } from "@/lib/api"
-import { History, Calendar, Gauge, Edit, Save, X, Trash2, Search } from "lucide-react"
+import { History, Gauge, Edit, Save, X, Trash2, Search } from "lucide-react"
+import { MaintenanceStatsGrid } from "@/components/MaintenanceStatsGrid"
 
 export function ServiceHistory() {
   const { addToast } = useToast()
@@ -216,9 +217,9 @@ export function ServiceHistory() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
+    <div className="min-h-screen bg-white">
+      <main className="mx-auto max-w-7xl px-6 py-8 pb-24 lg:pb-8">
+        <div className="mb-8 hidden lg:block">
           <h1 className="text-3xl font-bold mb-2">Service History</h1>
           <p className="text-muted-foreground">View and track completed maintenance services</p>
         </div>
@@ -250,92 +251,12 @@ export function ServiceHistory() {
 
                 {selectedVehicle && (
                   <>
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          Total Spent
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          PHP {totalCost.toFixed(2)}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          All services
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Calendar className="w-5 h-5" />
-                          Services
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {filteredRecords.length}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Total records
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Filters</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div>
-                          <label className="text-sm font-medium">Service Type</label>
-                          <Select value={filterType} onValueChange={setFilterType}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">All Services</SelectItem>
-                              {maintenanceItems.map((item) => (
-                                <SelectItem key={item._id} value={item._id}>
-                                  {item.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium">Date</label>
-                          <Input
-                            type="month"
-                            value={dateFilter}
-                            onChange={(e) => setDateFilter(e.target.value)}
-                            placeholder="Filter by date"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium">Search</label>
-                          <div className="relative">
-                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input
-                              type="text"
-                              value={searchTerm}
-                              onChange={(e) => setSearchTerm(e.target.value)}
-                              placeholder="Search services or notes"
-                              className="pl-8"
-                            />
-                          </div>
-                        </div>
-                        <div className="pt-2">
-                          <ExportButton
-                            vehicles={vehicles}
-                            selectedVehicleId={selectedVehicleId}
-                            onVehicleChange={setSelectedVehicleId}
-                            className="w-full"
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <MaintenanceStatsGrid
+                      totalCost={totalCost}
+                      serviceCount={serviceRecords.length}
+                      filteredRecordsCount={filteredRecords.length}
+                      maintenanceItemsCount={maintenanceItems.length}
+                    />
                   </>
                 )}
               </>
@@ -348,6 +269,81 @@ export function ServiceHistory() {
               maintenanceItems={maintenanceItems}
               onSuccess={handleServiceComplete}
             />
+          )}
+
+          {/* Filters and Actions */}
+          {selectedVehicleId && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Filters & Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="lg:hidden">
+                    <label className="text-sm font-medium">Service Type</label>
+                    <Select value={filterType} onValueChange={setFilterType}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Services</SelectItem>
+                        {maintenanceItems.map((item) => (
+                          <SelectItem key={item._id} value={item._id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="hidden lg:block">
+                    <label className="text-sm font-medium">Service Type</label>
+                    <Select value={filterType} onValueChange={setFilterType}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Services</SelectItem>
+                        {maintenanceItems.map((item) => (
+                          <SelectItem key={item._id} value={item._id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="hidden lg:block">
+                    <label className="text-sm font-medium">Date</label>
+                    <Input
+                      type="month"
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value)}
+                      placeholder="Filter by date"
+                    />
+                  </div>
+                  <div className="hidden lg:block">
+                    <label className="text-sm font-medium">Search</label>
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search services or notes"
+                        className="pl-8"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <ExportButton
+                      vehicles={vehicles}
+                      selectedVehicleId={selectedVehicleId}
+                      onVehicleChange={setSelectedVehicleId}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 
@@ -485,7 +481,7 @@ export function ServiceHistory() {
             </CardContent>
           </Card>
         )}
-      </div>
+      </main>
     </div>
   )
 }

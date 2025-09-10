@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { VehicleSelector } from "@/components/VehicleSelector"
 import { FillUpForm } from "@/components/FillUpForm"
 import { FuelPerformanceMetrics } from "@/components/FuelPerformanceMetrics"
+import { FuelStatsGrid } from "@/components/FuelStatsGrid"
 import { ExportButton } from "@/components/ExportButton"
 import { VirtualTable } from "@/components/ui/virtual-table"
 import { FuelHistorySkeleton, VehicleSelectorSkeleton } from "@/components/ui/skeleton"
@@ -13,18 +14,11 @@ import { Vehicle, FuelRecord, FuelPerformanceMetrics as FuelPerformanceMetricsTy
 import { api, debouncedSearch } from "@/lib/api"
 import { 
   History, 
-  Gauge, 
-  Edit, 
-  Save, 
-  X, 
   Trash2, 
-  Download, 
   Search,
   Fuel,
-  DollarSign,
   BarChart3,
-  LineChart,
-  Calculator
+  LineChart
 } from "lucide-react"
 import {
   LineChart as RechartsLineChart,
@@ -49,20 +43,7 @@ export function FuelHistory() {
   const [dateFilter, setDateFilter] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [searchResults, setSearchResults] = useState<FuelRecord[]>([])
-  const [editingRecord, setEditingRecord] = useState<FuelRecord | null>(null)
-  const [editForm, setEditForm] = useState({
-    date: "",
-    odometer_km: "",
-    liters: "",
-    price_per_liter: "",
-    total_cost: "",
-    notes: ""
-  })
   const [performanceMetrics, setPerformanceMetrics] = useState<FuelPerformanceMetricsType | null>(null)
-  const [sortConfig, setSortConfig] = useState<{
-    key: keyof FuelRecord | null
-    direction: 'ascending' | 'descending'
-  }>({ key: null, direction: 'ascending' })
 
   // Memoized calculations
   const selectedVehicle = useMemo(() => 
@@ -177,81 +158,7 @@ export function FuelHistory() {
     })
   }, [selectedVehicleId, addToast])
 
-  const startEditing = useCallback((record: FuelRecord) => {
-    setEditingRecord(record)
-    setEditForm({
-      date: record.date,
-      odometer_km: record.odometer_km.toString(),
-      liters: record.liters.toString(),
-      price_per_liter: record.price_per_liter.toString(),
-      total_cost: record.total_cost.toString(),
-      notes: record.notes || ""
-    })
-  }, [])
 
-  const cancelEditing = useCallback(() => {
-    setEditingRecord(null)
-    setEditForm({
-      date: "",
-      odometer_km: "",
-      liters: "",
-      price_per_liter: "",
-      total_cost: "",
-      notes: ""
-    })
-  }, [])
-
-  const saveEdit = useCallback(async () => {
-    if (!editingRecord) return
-
-    try {
-      const newOdometer = parseInt(editForm.odometer_km)
-
-      await api.updateFuelRecord(editingRecord._id, {
-        date: editForm.date,
-        odometer_km: newOdometer,
-        liters: parseFloat(editForm.liters),
-        price_per_liter: parseFloat(editForm.price_per_liter),
-        total_cost: parseFloat(editForm.total_cost),
-        notes: editForm.notes
-      })
-
-      // Update vehicle mileage if the new mileage is higher
-      try {
-        const vehiclesResponse = await api.getVehicles()
-        const currentVehicle = vehiclesResponse.find((v: Vehicle) => v._id === selectedVehicleId)
-        if (currentVehicle && newOdometer > currentVehicle.current_mileage) {
-          await api.updateVehicle(selectedVehicleId, { current_mileage: newOdometer })
-        }
-      } catch (error) {
-        console.error('Failed to update vehicle mileage:', error)
-      }
-
-      // Refresh data
-      if (selectedVehicleId) {
-        const [fuelResponse, metricsResponse] = await Promise.all([
-          api.getFuelRecords(selectedVehicleId),
-          api.getFuelPerformanceMetrics(selectedVehicleId)
-        ])
-        setFuelRecords(fuelResponse)
-        setPerformanceMetrics(metricsResponse)
-      }
-
-      cancelEditing()
-      addToast({
-        variant: "success",
-        title: "Record Updated",
-        description: "Fuel record has been updated successfully"
-      })
-    } catch (error) {
-      console.error('Failed to update fuel record:', error)
-      addToast({
-        variant: "error",
-        title: "Update Failed",
-        description: "Failed to update fuel record"
-      })
-    }
-  }, [editingRecord, editForm, selectedVehicleId, cancelEditing, addToast])
 
   const deleteFuelRecord = useCallback(async (recordId: string) => {
     if (!confirm('Are you sure you want to delete this fuel record? This action cannot be undone.')) {
@@ -286,32 +193,9 @@ export function FuelHistory() {
     }
   }, [selectedVehicleId, addToast])
 
-  const handleSort = useCallback((key: keyof FuelRecord) => {
-    let direction: 'ascending' | 'descending' = 'ascending'
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending'
-    }
-    setSortConfig({ key, direction })
-  }, [sortConfig])
-
   const sortedRecords = useMemo(() => {
-    const sortableRecords = [...(searchTerm ? searchResults : fuelRecords)]
-    if (sortConfig.key) {
-      sortableRecords.sort((a, b) => {
-        const aValue = a[sortConfig.key!]
-        const bValue = b[sortConfig.key!]
-        if (aValue === undefined || bValue === undefined) return 0
-        if (aValue < bValue) {
-          return sortConfig.direction === 'ascending' ? -1 : 1
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === 'ascending' ? 1 : -1
-        }
-        return 0
-      })
-    }
-    return sortableRecords
-  }, [searchTerm ? searchResults : fuelRecords, sortConfig])
+    return [...(searchTerm ? searchResults : fuelRecords)]
+  }, [searchTerm ? searchResults : fuelRecords])
 
   const filteredRecords = useMemo(() => {
     return sortedRecords.filter(record => {
@@ -354,9 +238,10 @@ export function FuelHistory() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
+    <div className="min-h-screen bg-white">
+      {/* Main Content */}
+      <main className="mx-auto max-w-7xl px-6 py-8 pb-24 lg:pb-8">
+        <div className="mb-8 hidden lg:block">
           <h1 className="text-3xl font-bold mb-2">Fuel History</h1>
           <p className="text-muted-foreground">Track fuel consumption and analyze vehicle performance</p>
         </div>
@@ -393,74 +278,13 @@ export function FuelHistory() {
 
                 {selectedVehicle && (
                   <>
-                    {/* Summary Cards */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <DollarSign className="w-5 h-5" />
-                          Total Cost
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          ₱{totalCost.toFixed(2)}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          All fill-ups
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Gauge className="w-5 h-5" />
-                          Distance
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {totalDistance.toLocaleString()} km
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Total traveled
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Fuel className="w-5 h-5" />
-                          Avg Economy
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {avgFuelEconomy.toFixed(1)} km/L
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Fuel efficiency
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Calculator className="w-5 h-5" />
-                          Cost per km
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          ₱{avgCostPerKm.toFixed(2)}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Average cost
-                        </div>
-                      </CardContent>
-                    </Card>
+                    {/* Stats Grid */}
+                    <FuelStatsGrid
+                      totalCost={totalCost}
+                      totalDistance={totalDistance}
+                      avgFuelEconomy={avgFuelEconomy}
+                      avgCostPerKm={avgCostPerKm}
+                    />
                   </>
                 )}
               </>
@@ -534,8 +358,17 @@ export function FuelHistory() {
                 <CardTitle>Filters & Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="lg:hidden">
+                    <label className="text-sm font-medium">Filter by month</label>
+                    <Input
+                      type="month"
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value)}
+                      placeholder="Filter by date"
+                    />
+                  </div>
+                  <div className="hidden lg:block">
                     <label className="text-sm font-medium">Date</label>
                     <Input
                       type="month"
@@ -544,7 +377,7 @@ export function FuelHistory() {
                       placeholder="Filter by date"
                     />
                   </div>
-                  <div>
+                  <div className="hidden lg:block">
                     <label className="text-sm font-medium">Search</label>
                     <div className="relative">
                       <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -647,7 +480,7 @@ export function FuelHistory() {
                     {
                       key: 'fuel_economy_kmpl',
                       header: 'Fuel Economy',
-                      render: (value, record) => {
+                      render: (value) => {
                         if (!value) return '-'
                         const className = value >= 12 ? 'text-green-600' : value >= 8 ? 'text-yellow-600' : 'text-red-600'
                         return <span className={className}>{value.toFixed(1)} km/L</span>
@@ -668,9 +501,6 @@ export function FuelHistory() {
                       header: 'Actions',
                       render: (_, record) => (
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => startEditing(record)}>
-                            <Edit className="w-4 h-4" />
-                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -685,14 +515,14 @@ export function FuelHistory() {
                   ]}
                   containerHeight={600}
                   loading={dataLoading}
-                  onRowClick={(record) => startEditing(record)}
+                  onRowClick={() => {}}
                   emptyMessage="No fuel records found"
                 />
               )}
             </CardContent>
           </Card>
         )}
-      </div>
+      </main>
     </div>
   )
 }

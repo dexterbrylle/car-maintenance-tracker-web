@@ -1,7 +1,7 @@
 import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,7 +17,6 @@ import {
   FileText, 
   Database, 
   Calendar,
-  Filter,
   CheckCircle2,
   Clock,
   AlertCircle
@@ -244,7 +243,6 @@ export function ExportUtility({ vehicles, selectedVehicleId, onVehicleChange, ch
   }
 
   const exportType = EXPORT_TYPES[selectedType]
-  const Icon = exportType.icon
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -368,8 +366,8 @@ export function ExportUtility({ vehicles, selectedVehicleId, onVehicleChange, ch
                     <Checkbox
                       id="includeSummary"
                       checked={exportOptions.includeSummary}
-                      onCheckedChange={(checked) => 
-                        setExportOptions(prev => ({ ...prev, includeSummary: !!checked }))
+                      onChange={(e) => 
+                        setExportOptions(prev => ({ ...prev, includeSummary: e.target.checked }))
                       }
                     />
                     <Label htmlFor="includeSummary" className="text-xs">
@@ -380,8 +378,8 @@ export function ExportUtility({ vehicles, selectedVehicleId, onVehicleChange, ch
                     <Checkbox
                       id="includeCharts"
                       checked={exportOptions.includeCharts}
-                      onCheckedChange={(checked) => 
-                        setExportOptions(prev => ({ ...prev, includeCharts: !!checked }))
+                      onChange={(e) => 
+                        setExportOptions(prev => ({ ...prev, includeCharts: e.target.checked }))
                       }
                     />
                     <Label htmlFor="includeCharts" className="text-xs">
@@ -435,7 +433,7 @@ export function ExportUtility({ vehicles, selectedVehicleId, onVehicleChange, ch
                               <Checkbox
                                 id={column}
                                 checked={exportOptions.selectedColumns.includes(column)}
-                                onCheckedChange={() => handleColumnToggle(column)}
+                                onChange={() => handleColumnToggle(column)}
                               />
                               <Label htmlFor={column} className="text-xs">
                                 {column}
@@ -453,7 +451,7 @@ export function ExportUtility({ vehicles, selectedVehicleId, onVehicleChange, ch
                       <Checkbox
                         id={column}
                         checked={exportOptions.selectedColumns.includes(column)}
-                        onCheckedChange={() => handleColumnToggle(column)}
+                        onChange={() => handleColumnToggle(column)}
                       />
                       <Label htmlFor={column} className="text-sm">
                         {column}

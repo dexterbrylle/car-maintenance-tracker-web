@@ -1,4 +1,4 @@
-import React, { JSX } from 'react'
+import { JSX } from 'react'
 import { cn } from '@/lib/utils'
 
 interface SkeletonProps {
@@ -29,13 +29,14 @@ export function Skeleton({ className, lines = 1, animate = true }: SkeletonProps
 interface CardSkeletonProps {
   className?: string
   lines?: number
+  children?: React.ReactNode
 }
 
-export function CardSkeleton({ className, lines = 3 }: CardSkeletonProps) {
+export function CardSkeleton({ className, lines = 3, children }: CardSkeletonProps) {
   return (
     <div className={cn('border rounded-lg p-6 space-y-4', className)}>
       <Skeleton className="h-6 w-1/3" />
-      <Skeleton lines={lines} />
+      {children || <Skeleton lines={lines} />}
     </div>
   )
 }
@@ -78,7 +79,6 @@ export function StatsCardSkeleton({ count = 4 }: StatsCardSkeletonProps) {
   )
 }
 
-interface DashboardSkeletonProps {}
 
 export function DashboardSkeleton(): JSX.Element {
   return (
@@ -99,7 +99,6 @@ export function DashboardSkeleton(): JSX.Element {
   )
 }
 
-interface FuelHistorySkeletonProps {}
 
 export function FuelHistorySkeleton(): JSX.Element {
   return (
@@ -121,7 +120,6 @@ export function FuelHistorySkeleton(): JSX.Element {
   )
 }
 
-interface ServiceHistorySkeletonProps {}
 
 export function ServiceHistorySkeleton(): JSX.Element {
   return (
@@ -138,7 +136,6 @@ export function ServiceHistorySkeleton(): JSX.Element {
   )
 }
 
-interface VehicleSelectorSkeletonProps {}
 
 export function VehicleSelectorSkeleton(): JSX.Element {
   return (

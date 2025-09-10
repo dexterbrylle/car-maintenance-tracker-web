@@ -4,18 +4,14 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ExportUtility } from "./ExportUtility"
 import { ExportHistory } from "./ExportHistory"
-import { ExportButton } from "./ExportButton"
 import { Vehicle } from "@/types"
 import { 
   Download, 
   FileText, 
   FileSpreadsheet, 
   Database, 
-  Calendar, 
   History,
-  Settings,
   BarChart3,
-  Filter,
   RefreshCw,
   Zap
 } from "lucide-react"
@@ -207,7 +203,7 @@ export function ExportManager({ vehicles, selectedVehicleId, onVehicleChange }: 
         </TabsContent>
 
         <TabsContent value="history">
-          <ExportHistory vehicles={vehicles} />
+          <ExportHistory />
         </TabsContent>
       </Tabs>
     </div>

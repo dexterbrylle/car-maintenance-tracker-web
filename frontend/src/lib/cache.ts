@@ -1,4 +1,3 @@
-import { Vehicle, MaintenanceItem, ServiceRecord, DashboardData, FuelRecord, FuelPerformanceMetrics as FuelPerformanceMetricsType } from '@/types'
 
 // Cache keys
 export const CACHE_KEYS = {
@@ -34,8 +33,10 @@ class CacheManager {
       getItem: () => null,
       setItem: () => {},
       removeItem: () => {},
-      clear: () => {}
-    }
+      clear: () => {},
+      length: 0,
+      key: () => null
+    } as Storage
   }
 
   private getCacheEntry<T>(key: string): CacheEntry<T> | null {

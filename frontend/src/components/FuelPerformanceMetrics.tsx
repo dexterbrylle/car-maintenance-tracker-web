@@ -147,25 +147,25 @@ export function FuelPerformanceMetrics({ vehicleId, className = "" }: FuelPerfor
     : 'No data'
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Fuel className="w-5 h-5" />
-          Fuel Performance Metrics
-        </CardTitle>
-        <CardDescription>Your vehicle's fuel economy and cost analysis</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className={`premium-card ${className}`}>
+      <div className="flex items-center space-x-3 mb-6">
+        <Fuel className="h-5 w-5 text-slate-700" />
+        <h3 className="text-lg font-semibold text-slate-900">Fuel Performance</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           {/* Average Fuel Economy */}
-          <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <Fuel className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-            <div className={`text-2xl font-bold ${getFuelEconomyColor(metrics.avg_fuel_economy)}`}>
-              {metrics.avg_fuel_economy ? `${metrics.avg_fuel_economy} km/L` : 'N/A'}
+          <div className="status-neutral p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Avg Fuel Economy</p>
+                <p className={`text-2xl font-bold ${getFuelEconomyColor(metrics.avg_fuel_economy)}`}>
+                  {metrics.avg_fuel_economy ? `${metrics.avg_fuel_economy} km/L` : 'N/A'}
+                </p>
+              </div>
+              <Fuel className="h-8 w-8 text-slate-600" />
             </div>
-            <div className="text-sm text-blue-700">Avg Fuel Economy</div>
             {metrics.trend_percent !== undefined && (
-              <div className="flex items-center justify-center gap-1 mt-1">
+              <div className="flex items-center gap-1">
                 {getTrendIcon(metrics.trend_percent)}
                 <span className={`text-xs ${getTrendColor(metrics.trend_percent)}`}>
                   {metrics.trend_percent > 0 ? '+' : ''}{metrics.trend_percent}%
@@ -175,63 +175,75 @@ export function FuelPerformanceMetrics({ vehicleId, className = "" }: FuelPerfor
           </div>
 
           {/* Average Cost per Kilometer */}
-          <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
-            <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
-            <div className={`text-2xl font-bold ${getCostPerKmColor(metrics.avg_cost_per_km)}`}>
-              {metrics.avg_cost_per_km ? `₱${metrics.avg_cost_per_km}` : 'N/A'}
+          <div className="status-neutral p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Cost per Kilometer</p>
+                <p className={`text-2xl font-bold ${getCostPerKmColor(metrics.avg_cost_per_km)}`}>
+                  {metrics.avg_cost_per_km ? `₱${metrics.avg_cost_per_km}` : 'N/A'}
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-slate-600" />
             </div>
-            <div className="text-sm text-green-700">Cost per Kilometer</div>
           </div>
 
           {/* Total Fuel Cost YTD */}
-          <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
-            <DollarSign className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-purple-600">
-              ₱{metrics.total_fuel_cost_ytd.toLocaleString()}
+          <div className="status-neutral p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Fuel Cost YTD {currentYear}</p>
+                <p className="text-2xl font-bold text-slate-700">
+                  ₱{metrics.total_fuel_cost_ytd.toLocaleString()}
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-slate-600" />
             </div>
-            <div className="text-sm text-purple-700">Fuel Cost YTD {currentYear}</div>
           </div>
 
           {/* Total Fill-ups */}
-          <div className="text-center p-4 bg-orange-50 rounded-lg border border-orange-200">
-            <Calendar className="w-8 h-8 text-orange-600 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-orange-600">
-              {metrics.total_fillups}
-            </div>
-            <div className="text-sm text-orange-700">Total Fill-ups</div>
-            <div className="text-xs text-orange-600 mt-1">
-              Last: {lastFillupDate}
+          <div className="status-neutral p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Total Fill-ups</p>
+                <p className="text-2xl font-bold text-slate-700">
+                  {metrics.total_fillups}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Last: {lastFillupDate}
+                </p>
+              </div>
+              <Calendar className="h-8 w-8 text-slate-600" />
             </div>
           </div>
         </div>
 
         {/* Best/Worst Performance */}
         {(metrics.best_fuel_economy || metrics.worst_fuel_economy) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {metrics.best_fuel_economy && (
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="status-success p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm text-green-700 mb-1">Best Fuel Economy</div>
-                    <div className="text-xl font-bold text-green-600">
+                    <div className="text-sm font-medium text-emerald-900 mb-1">Best Fuel Economy</div>
+                    <div className="text-xl font-bold text-emerald-700">
                       {metrics.best_fuel_economy} km/L
                     </div>
                   </div>
-                  <TrendingUp className="w-6 h-6 text-green-600" />
+                  <TrendingUp className="h-6 w-6 text-emerald-600" />
                 </div>
               </div>
             )}
             
             {metrics.worst_fuel_economy && (
-              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+              <div className="status-critical p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm text-red-700 mb-1">Worst Fuel Economy</div>
-                    <div className="text-xl font-bold text-red-600">
+                    <div className="text-sm font-medium text-red-900 mb-1">Worst Fuel Economy</div>
+                    <div className="text-xl font-bold text-red-700">
                       {metrics.worst_fuel_economy} km/L
                     </div>
                   </div>
-                  <TrendingDown className="w-6 h-6 text-red-600" />
+                  <TrendingDown className="h-6 w-6 text-red-600" />
                 </div>
               </div>
             )}
@@ -296,7 +308,6 @@ export function FuelPerformanceMetrics({ vehicleId, className = "" }: FuelPerfor
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   )
 }

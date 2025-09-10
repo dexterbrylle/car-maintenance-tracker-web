@@ -100,9 +100,9 @@ export function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
+    <div className="min-h-screen bg-white">
+      <main className="mx-auto max-w-7xl px-6 py-8 pb-24 lg:pb-8">
+        <div className="mb-8 hidden lg:block">
           <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
             <SettingsIcon className="w-8 h-8" />
             Settings
@@ -358,7 +358,7 @@ export function Settings() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

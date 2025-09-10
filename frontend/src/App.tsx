@@ -24,11 +24,11 @@ function RouteLoading() {
 import { Button } from './components/ui/button'
 import { ToastProvider, ToastContainer } from './components/ui/toast'
 import { Car, Settings as SettingsIcon, History, Calendar, Download, Fuel } from 'lucide-react'
-import { BottomNavigation } from './components/mobile'
+import { MobileNavigation } from './components/mobile/MobileNavigation'
 
 function Navigation() {
   return (
-    <nav className="border-b bg-background">
+    <nav className="border-b bg-background hidden lg:block">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-4">
@@ -141,7 +141,7 @@ function App() {
           <ToastContainer />
 
           {/* Mobile Navigation */}
-          <BottomNavigation />
+          <MobileNavigation />
         </div>
       </Router>
     </ToastProvider>

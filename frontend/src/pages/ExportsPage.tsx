@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/toast"
 import { Vehicle } from "@/types"
 import { api } from "@/lib/api"
-import { Download, FileText, BarChart3, Calendar, Truck } from "lucide-react"
+import { Download, Truck } from "lucide-react"
 
 export function ExportsPage() {
   const { addToast } = useToast()

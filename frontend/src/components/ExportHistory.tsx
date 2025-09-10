@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/ui/toast"
-import { Download, Search, Filter, Trash2, RefreshCw, FileText, FileSpreadsheet, Database, Calendar } from "lucide-react"
+import { Download, Search, Trash2, RefreshCw, FileText, FileSpreadsheet, Database, Calendar } from "lucide-react"
 
 interface ExportHistoryItem {
   id: string
@@ -20,11 +20,8 @@ interface ExportHistoryItem {
   downloadUrl?: string
 }
 
-interface ExportHistoryProps {
-  vehicles: Array<{ _id: string; make: string; model: string; year: number }>
-}
 
-export function ExportHistory({ vehicles }: ExportHistoryProps) {
+export function ExportHistory() {
   const { addToast } = useToast()
   const [history, setHistory] = useState<ExportHistoryItem[]>([])
   const [loading, setLoading] = useState(true)

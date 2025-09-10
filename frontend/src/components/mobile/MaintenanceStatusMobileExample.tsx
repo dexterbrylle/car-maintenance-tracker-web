@@ -1,6 +1,5 @@
 import React from 'react';
 import { MaintenanceStatusMobile } from './MaintenanceStatusMobile';
-import { DashboardMaintenanceItem } from '@/types';
 
 // Example data for demonstration
 const exampleMaintenanceStatus = {

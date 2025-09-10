@@ -17,7 +17,8 @@ export function Vehicles() {
     make: "",
     model: "",
     year: new Date().getFullYear(),
-    current_mileage: ""
+    current_mileage: "",
+    purchase_mileage: ""
   })
 
   useEffect(() => {
@@ -41,17 +42,33 @@ export function Vehicles() {
     try {
       const data = {
         ...formData,
-        current_mileage: parseInt(formData.current_mileage)
+        current_mileage: parseInt(formData.current_mileage),
+        purchase_mileage: parseInt(formData.purchase_mileage) || 0
       }
 
       if (editingVehicle) {
         await api.updateVehicle(editingVehicle._id, data)
+        // Update state instantly instead of reloading - create updated vehicle object
+        setVehicles(prevVehicles => 
+          prevVehicles.map(vehicle => 
+            vehicle._id === editingVehicle._id 
+              ? { ...vehicle, ...data }
+              : vehicle
+          )
+        )
       } else {
-        await api.addVehicle(data)
+        const response = await api.addVehicle(data)
+        // For new vehicles, we need to create the full vehicle object with the response
+        const newVehicle: Vehicle = {
+          _id: response.id,
+          ...data,
+          created_at: new Date().toISOString()
+        }
+        // Update state instantly instead of reloading
+        setVehicles(prevVehicles => [...prevVehicles, newVehicle])
       }
 
       resetForm()
-      loadVehicles()
     } catch (error) {
       console.error('Failed to save vehicle:', error)
     }
@@ -63,7 +80,8 @@ export function Vehicles() {
       make: vehicle.make,
       model: vehicle.model,
       year: vehicle.year,
-      current_mileage: vehicle.current_mileage.toString()
+      current_mileage: vehicle.current_mileage.toString(),
+      purchase_mileage: vehicle.purchase_mileage.toString()
     })
     setShowAddForm(true)
   }
@@ -72,7 +90,8 @@ export function Vehicles() {
     if (confirm('Are you sure you want to delete this vehicle?')) {
       try {
         await api.deleteVehicle(vehicleId)
-        loadVehicles()
+        // Update state instantly instead of reloading
+        setVehicles(prevVehicles => prevVehicles.filter(vehicle => vehicle._id !== vehicleId))
       } catch (error) {
         console.error('Failed to delete vehicle:', error)
       }
@@ -84,7 +103,8 @@ export function Vehicles() {
       make: "",
       model: "",
       year: new Date().getFullYear(),
-      current_mileage: ""
+      current_mileage: "",
+      purchase_mileage: ""
     })
     setEditingVehicle(null)
     setShowAddForm(false)
@@ -161,6 +181,16 @@ export function Vehicles() {
                         onChange={(e) => setFormData(prev => ({ ...prev, current_mileage: e.target.value }))}
                         placeholder="e.g., 50000"
                         required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="purchaseMileage">Purchase Mileage (km)</Label>
+                      <Input
+                        id="purchaseMileage"
+                        type="number"
+                        value={formData.purchase_mileage}
+                        onChange={(e) => setFormData(prev => ({ ...prev, purchase_mileage: e.target.value }))}
+                        placeholder="e.g., 45000"
                       />
                     </div>
                   </div>
