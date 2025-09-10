@@ -50,20 +50,24 @@ docker-compose logs frontend # View frontend logs only
 - **Build Tool**: Vite with custom path aliases (`@/` for `src/`)
 - **Styling**: Tailwind CSS with PostCSS
 - **Linting**: ESLint with React hooks and refresh plugins
+- **Mobile Components**: Mobile-optimized components in `src/components/mobile/`
+- **Performance**: Virtualized tables and debounced inputs for large datasets
 
 ### Backend Structure (`backend/`)
 - **Flask 2.3.3** with Blueprint pattern
 - **Routes**: Modular route handling in `routes/` directory
 - **Models**: Data models and MongoDB schema in `models.py`
 - **Services**: Business logic separation (for future expansion)
+- **Utils**: Utility functions for fuel calculations and insights in `utils/` directory
 - **CORS**: Configured for both development and production
 - **Swagger**: Auto-generated API documentation (OpenAPI 2.0)
 - **Serialization**: Custom JSON encoder for MongoDB ObjectId and datetime
 - **Python Version**: 3.11 with PyMongo driver
+- **Data**: Vehicle-specific maintenance schedules in `data/` directory
 
 ### Database
 - **MongoDB** with PyMongo driver
-- **Collections**: vehicles, maintenance_items, service_records
+- **Collections**: vehicles, maintenance_items, service_records, fillups
 - **ObjectIds**: Used as primary keys with proper serialization
 
 ## Enhanced Features
@@ -79,6 +83,20 @@ docker-compose logs frontend # View frontend logs only
 - **Priority Sorting**: Overdue items first, then by due date
 - **Smart Calculations**: Based on last service and purchase mileage
 - **Export Functionality**: Service history export to CSV/Excel formats
+
+### Fuel Tracking System
+- **Fill-Up Management**: Complete fuel fill-up tracking with odometer readings
+- **Automatic Calculations**: Fuel economy (km/L) and cost per kilometer calculations
+- **Performance Analytics**: Monthly fuel cost trends and performance insights
+- **Data Validation**: Comprehensive validation for odometer progression and data integrity
+- **Statistics Dashboard**: Comprehensive fuel statistics with best/worst economy tracking
+- **Trend Analysis**: Fuel efficiency trends with improvement/decline detection
+
+### Export Functionality
+- **Service History Export**: Export service records to CSV and Excel formats
+- **Custom Date Ranges**: Flexible date range selection for exports
+- **Multiple Formats**: Support for different export formats and templates
+- **Download Management**: Export history and download tracking
 
 ### Production Deployment
 - **Nginx Reverse Proxy**: Proper API routing and SPA support
@@ -128,6 +146,24 @@ interface ServiceRecord {
 }
 ```
 
+### FillUp
+```typescript
+interface FillUp {
+  _id: string;
+  vehicle_id: string;
+  date: string;
+  odometer_km: number;
+  liters: number;
+  price_per_liter: number;
+  total_cost: number;
+  full_tank: boolean;
+  fuel_economy_kmpl?: number;
+  cost_per_km?: number;
+  notes?: string;
+  created_at: string;
+}
+```
+
 ## API Endpoints
 
 ### Vehicles
@@ -145,6 +181,19 @@ interface ServiceRecord {
 - `POST /api/services` - Add service record
 - `PUT /api/services/{id}` - Update service record
 - `DELETE /api/services/{id}` - Delete service record
+
+### Fuel Tracking
+- `POST /api/fillups` - Add new fill-up record
+- `GET /api/fillups/{vehicleId}` - Get fill-ups for vehicle with pagination
+- `PUT /api/fillups/{fillupId}` - Update fill-up record
+- `DELETE /api/fillups/{fillupId}` - Delete fill-up record
+- `GET /api/fillups/stats/{vehicleId}` - Get fuel statistics for vehicle
+- `GET /api/fillups/recent/{vehicleId}` - Get recent fill-ups for dashboard
+
+### Export
+- `POST /api/export/service-history` - Export service history
+- `GET /api/export/history` - Get export history
+- `GET /api/export/download/{exportId}` - Download exported file
 
 ### Dashboard
 - `GET /api/dashboard/{vehicleId}` - Get maintenance status overview
@@ -221,3 +270,4 @@ interface ServiceRecord {
 ├── docker-compose.yml    # Docker orchestration
 └── README.md            # Project documentation
 ```
+- @backend/ utilizes venv. Activate it with source .venv/bin/activate for running python scripts or operations in this directory

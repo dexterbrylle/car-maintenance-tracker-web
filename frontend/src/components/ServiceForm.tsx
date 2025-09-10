@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { MaintenanceItem } from "@/types"
 import { useState } from "react"
+import React from "react"
 import { api } from "@/lib/api"
 import { Settings, Search } from "lucide-react"
 
@@ -28,8 +29,8 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
   const [searchTerm, setSearchTerm] = useState("")
 
   // Filter and group maintenance items by category
-  const filteredItems = maintenanceItems.filter(item => 
-    !searchTerm || 
+  const filteredItems = maintenanceItems.filter(item =>
+    !searchTerm ||
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -51,7 +52,7 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
         return prev.filter(id => id !== itemId)
       }
     })
-    
+
     // Initialize cost when item is selected
     if (checked && !itemCosts[itemId]) {
       setItemCosts(prev => ({
@@ -75,10 +76,10 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
     }))
   }
 
-  const handleSelectAllInCategory = (category: string, items: MaintenanceItem[]) => {
+  const handleSelectAllInCategory = (_category: string, items: MaintenanceItem[]) => {
     const itemIds = items.map(item => item._id)
     const allSelected = itemIds.every(id => selectedItems.includes(id))
-    
+
     if (allSelected) {
       // Deselect all items in this category
       setSelectedItems(prev => prev.filter(id => !itemIds.includes(id)))
@@ -125,8 +126,8 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
 
       // Update vehicle mileage if the new mileage is higher
       try {
-        const vehiclesResponse = await api.getVehicles()
-        const currentVehicle = vehiclesResponse.data.find((v: any) => v._id === vehicleId)
+        const vehicles = await api.getVehicles()
+        const currentVehicle = vehicles.find((v: any) => v._id === vehicleId)
         if (currentVehicle && newMileage > currentVehicle.current_mileage) {
           await api.updateVehicle(vehicleId, { current_mileage: newMileage })
         }
@@ -172,7 +173,7 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
                 {selectedItems.length} selected
               </div>
             </div>
-            
+
             {/* Search Bar */}
             <div className="relative">
               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -190,8 +191,8 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
                 <div className="text-center py-8 text-muted-foreground">
                   <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p>No maintenance items found matching "{searchTerm}"</p>
-                  <Button 
-                    variant="link" 
+                  <Button
+                    variant="link"
                     onClick={() => setSearchTerm("")}
                     className="text-sm"
                   >
@@ -199,7 +200,7 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
                   </Button>
                 </div>
               )}
-              
+
               {Object.entries(groupedItems).map(([category, items]) => (
                 <div key={category} className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -252,7 +253,6 @@ export function ServiceForm({ vehicleId, maintenanceItems, onSuccess }: ServiceF
                                 value={itemCosts[item._id] || ""}
                                 onChange={(e) => handleItemCostChange(item._id, e.target.value)}
                                 className="w-full mt-1"
-                                size="sm"
                               />
                             </div>
                           )}

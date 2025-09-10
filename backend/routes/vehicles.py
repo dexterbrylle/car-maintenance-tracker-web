@@ -1,7 +1,9 @@
-from flask import Blueprint, request, jsonify
-from models import Vehicle, MaintenanceItem
+from flask import Blueprint, request, jsonify, make_response
+from models import Vehicle, MaintenanceItem, ServiceRecord
 from bson.objectid import ObjectId
 from datetime import datetime
+import csv
+import io
 
 bp = Blueprint('vehicles', __name__)
 
@@ -107,5 +109,103 @@ def update_mileage(vehicle_id):
         else:
             return jsonify({'error': 'Vehicle not found'}), 404
             
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/export/<vehicle_id>', methods=['GET'])
+def export_vehicle_info(vehicle_id):
+    """Export vehicle information to CSV format"""
+    try:
+        # Get vehicle info
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
+        # Get related statistics
+        maintenance_items = MaintenanceItem.get_maintenance_items_by_vehicle(vehicle_id)
+        service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
+        
+        # Calculate statistics
+        total_services = len(service_records)
+        total_maintenance_items = len(maintenance_items)
+        total_cost = sum(record.get('cost', 0) for record in service_records)
+        
+        # Get maintenance status summary
+        current_mileage = vehicle.get('current_mileage', 0)
+        purchase_mileage = vehicle.get('purchase_mileage', 0)
+        overdue_items = 0
+        due_soon_items = 0
+        
+        for item in maintenance_items:
+            item_id_str = str(item['_id'])
+            relevant_services = [
+                s for s in service_records 
+                if str(s.get('maintenance_item_id')) == item_id_str
+            ]
+            relevant_services.sort(key=lambda x: x.get('mileage', 0), reverse=True)
+            
+            if relevant_services:
+                last_service_mileage = relevant_services[0].get('mileage', 0)
+            else:
+                last_service_mileage = purchase_mileage
+            
+            interval_km = item.get('interval_km', 0)
+            next_due_mileage = last_service_mileage + interval_km
+            
+            if current_mileage >= next_due_mileage:
+                overdue_items += 1
+            elif current_mileage >= (next_due_mileage - 1000):
+                due_soon_items += 1
+        
+        # Create CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write vehicle information section
+        writer.writerow(['Vehicle Information'])
+        writer.writerow(['Make', vehicle.get('make', '')])
+        writer.writerow(['Model', vehicle.get('model', '')])
+        writer.writerow(['Year', vehicle.get('year', '')])
+        writer.writerow(['Current Mileage', vehicle.get('current_mileage', '')])
+        writer.writerow(['Purchase Mileage', vehicle.get('purchase_mileage', '')])
+        writer.writerow(['Created Date', vehicle.get('created_at', '').replace('T', ' ').split('.')[0] if vehicle.get('created_at') else ''])
+        writer.writerow([])
+        
+        # Write statistics section
+        writer.writerow(['Statistics'])
+        writer.writerow(['Total Services', total_services])
+        writer.writerow(['Total Maintenance Items', total_maintenance_items])
+        writer.writerow(['Total Service Cost', f"₱{total_cost:.2f}"])
+        writer.writerow(['Overdue Maintenance Items', overdue_items])
+        writer.writerow(['Due Soon Maintenance Items', due_soon_items])
+        writer.writerow(['Up to Date Maintenance Items', total_maintenance_items - overdue_items - due_soon_items])
+        writer.writerow([])
+        
+        # Write maintenance summary
+        writer.writerow(['Maintenance Categories'])
+        categories = {}
+        for item in maintenance_items:
+            category = item.get('category', 'Other')
+            if category not in categories:
+                categories[category] = 0
+            categories[category] += 1
+        
+        for category, count in categories.items():
+            writer.writerow([category, count])
+        
+        # Create response
+        csv_content = output.getvalue()
+        output.close()
+        
+        # Generate filename
+        vehicle_name = f"{vehicle.get('year', '')}-{vehicle.get('make', '')}-{vehicle.get('model', '')}".strip('-')
+        filename = f"vehicle-info-{vehicle_name}-{datetime.now().strftime('%Y%m%d')}.csv"
+        
+        response = make_response(csv_content)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500

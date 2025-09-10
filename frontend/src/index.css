@@ -1,3 +1,172 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Design System Variables */
+:root {
+  /* Color Palette */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+
+  /* Status Colors */
+  --color-status-critical: #dc2626;
+  --color-status-warning: #d97706;
+  --color-status-success: #059669;
+  --color-status-info: #0284c7;
+
+  /* Background Colors */
+  --color-background: #ffffff;
+  --color-background-secondary: #f8fafc;
+  --color-background-tertiary: #f1f5f9;
+
+  /* Text Colors */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #64748b;
+
+  /* Spacing Scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  /* Border Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+}
+
+/* Force light theme only */
+
+/* Base Styles */
+@layer base {
+  * {
+    border-color: theme('colors.slate.200');
+  }
+  
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Component Styles */
+@layer components {
+  /* Premium Card */
+  .premium-card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+  }
+  
+  .premium-card-hover {
+    @apply hover:shadow-md hover:border-slate-300 transition-all duration-200;
+  }
+  
+  /* Status Variants */
+  .status-critical {
+    @apply bg-red-50 border-red-100 text-red-900;
+  }
+  
+  .status-warning {
+    @apply bg-amber-50 border-amber-100 text-amber-900;
+  }
+  
+  .status-success {
+    @apply bg-emerald-50 border-emerald-100 text-emerald-900;
+  }
+  
+  .status-neutral {
+    @apply bg-slate-50 border-slate-200 text-slate-900;
+  }
+  
+  /* Premium Button */
+  .btn-primary {
+    @apply bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300 disabled:text-slate-500 rounded-xl px-6 py-3 font-medium transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-400 rounded-xl px-6 py-3 font-medium transition-colors duration-200;
+  }
+  
+  .btn-ghost {
+    @apply text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl px-4 py-2 font-medium transition-colors duration-200;
+  }
+  
+  /* Premium Input */
+  .input-premium {
+    @apply w-full rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 bg-white;
+  }
+  
+  /* Mobile Navigation */
+  .pb-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+/* Animation utilities */
+@keyframes slide-in-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-up {
+  animation: slide-in-up 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Transition delay utilities */
+.transition-delay-100 {
+  transition-delay: 100ms;
+}
+
+.transition-delay-200 {
+  transition-delay: 200ms;
+}
+
+.transition-delay-300 {
+  transition-delay: 300ms;
+}
+
+/* Mobile-optimized touch targets */
+@media (max-width: 768px) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

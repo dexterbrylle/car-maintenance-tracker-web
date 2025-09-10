@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { VehicleSelector } from "@/components/VehicleSelector"
 import { ServiceForm } from "@/components/ServiceForm"
+import { ExportButton } from "@/components/ExportButton"
 import { useToast } from "@/components/ui/toast"
 import { Vehicle, ServiceRecord, MaintenanceItem } from "@/types"
 import { api } from "@/lib/api"
-import { History, Calendar, Gauge, Edit, Save, X, Trash2, Download, Search } from "lucide-react"
+import { History, Gauge, Edit, Save, X, Trash2, Search } from "lucide-react"
+import { MaintenanceStatsGrid } from "@/components/MaintenanceStatsGrid"
 
 export function ServiceHistory() {
   const { addToast } = useToast()
@@ -18,7 +20,6 @@ export function ServiceHistory() {
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([])
   const [maintenanceItems, setMaintenanceItems] = useState<MaintenanceItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [exporting, setExporting] = useState(false)
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [filterType, setFilterType] = useState<string>("all")
   const [dateFilter, setDateFilter] = useState<string>("")
@@ -46,9 +47,10 @@ export function ServiceHistory() {
   const loadVehicles = async () => {
     try {
       const response = await api.getVehicles()
-      setVehicles(response.data)
-      if (response.data.length > 0 && !selectedVehicleId) {
-        setSelectedVehicleId(response.data[0]._id)
+      const vehiclesData = Array.isArray(response) ? response : []
+      setVehicles(vehiclesData)
+      if (vehiclesData.length > 0 && !selectedVehicleId) {
+        setSelectedVehicleId(vehiclesData[0]._id)
       }
     } catch (error) {
       console.error('Failed to load vehicles:', error)
@@ -65,7 +67,8 @@ export function ServiceHistory() {
   const loadServiceRecords = async () => {
     try {
       const response = await api.getServices(selectedVehicleId)
-      setServiceRecords(response.data)
+      const serviceData = Array.isArray(response) ? response : []
+      setServiceRecords(serviceData)
     } catch (error) {
       console.error('Failed to load service records:', error)
       addToast({
@@ -79,7 +82,8 @@ export function ServiceHistory() {
   const loadMaintenanceItems = async () => {
     try {
       const response = await api.getMaintenance(selectedVehicleId)
-      setMaintenanceItems(response.data)
+      const maintenanceData = Array.isArray(response) ? response : []
+      setMaintenanceItems(maintenanceData)
     } catch (error) {
       console.error('Failed to load maintenance items:', error)
       addToast({
@@ -90,52 +94,7 @@ export function ServiceHistory() {
     }
   }
 
-  const exportServiceHistory = async () => {
-    if (!selectedVehicleId) return
-    
-    setExporting(true)
-    try {
-      const response = await api.exportServiceHistory(selectedVehicleId)
-      
-      // Create blob and download
-      const blob = new Blob([response.data], { type: 'text/csv' })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      
-      // Extract filename from response headers or create default
-      const contentDisposition = response.headers['content-disposition']
-      let filename = 'service-history.csv'
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/)
-        if (filenameMatch) {
-          filename = filenameMatch[1]
-        }
-      }
-      
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      
-      addToast({
-        variant: "success",
-        title: "Export Complete",
-        description: "Service history exported successfully"
-      })
-    } catch (error) {
-      console.error('Failed to export service history:', error)
-      addToast({
-        variant: "error",
-        title: "Export Failed",
-        description: "Failed to export service history"
-      })
-    } finally {
-      setExporting(false)
-    }
-  }
-
+  
   const handleServiceComplete = () => {
     loadServiceRecords()
     setShowServiceForm(false)
@@ -185,7 +144,8 @@ export function ServiceHistory() {
       // Update vehicle mileage if the new mileage is higher
       try {
         const vehiclesResponse = await api.getVehicles()
-        const currentVehicle = vehiclesResponse.data.find((v: any) => v._id === selectedVehicleId)
+        const vehiclesData = Array.isArray(vehiclesResponse) ? vehiclesResponse : []
+        const currentVehicle = vehiclesData.find((v: any) => v._id === selectedVehicleId)
         if (currentVehicle && newMileage > currentVehicle.current_mileage) {
           await api.updateVehicle(selectedVehicleId, { current_mileage: newMileage })
         }
@@ -250,31 +210,31 @@ export function ServiceHistory() {
 
   const totalCost = serviceRecords.reduce((sum, record) => sum + record.cost, 0)
 
-  const selectedVehicle = vehicles.find(v => v._id === selectedVehicleId)
+  const selectedVehicle = vehicles?.find(v => v._id === selectedVehicleId)
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
+    <div className="min-h-screen bg-white">
+      <main className="mx-auto max-w-7xl px-6 py-8 pb-24 lg:pb-8">
+        <div className="mb-8 hidden lg:block">
           <h1 className="text-3xl font-bold mb-2">Service History</h1>
           <p className="text-muted-foreground">View and track completed maintenance services</p>
         </div>
 
         <div className="grid gap-6 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {vehicles.length === 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>No Vehicles</CardTitle>
-                  <CardDescription>Add a vehicle first</CardDescription>
-                </CardHeader>
-              </Card>
-            ) : (
-              <>
+          {vehicles.length === 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>No Vehicles</CardTitle>
+                <CardDescription>Add a vehicle first</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4">
                 <Card>
                   <CardHeader>
                     <CardTitle>Vehicle</CardTitle>
@@ -288,109 +248,18 @@ export function ServiceHistory() {
                     />
                   </CardContent>
                 </Card>
+              </div>
 
-                {selectedVehicle && (
-                  <>
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          Total Spent
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          PHP {totalCost.toFixed(2)}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          All services
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Calendar className="w-5 h-5" />
-                          Services
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {filteredRecords.length}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Total records
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Filters</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div>
-                          <label className="text-sm font-medium">Service Type</label>
-                          <Select value={filterType} onValueChange={setFilterType}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">All Services</SelectItem>
-                              {maintenanceItems.map((item) => (
-                                <SelectItem key={item._id} value={item._id}>
-                                  {item.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium">Date</label>
-                          <Input
-                            type="month"
-                            value={dateFilter}
-                            onChange={(e) => setDateFilter(e.target.value)}
-                            placeholder="Filter by date"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium">Search</label>
-                          <div className="relative">
-                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input
-                              type="text"
-                              value={searchTerm}
-                              onChange={(e) => setSearchTerm(e.target.value)}
-                              placeholder="Search services or notes"
-                              className="pl-8"
-                            />
-                          </div>
-                        </div>
-                        <div className="pt-2">
-                          <Button
-                            onClick={exportServiceHistory}
-                            disabled={exporting || filteredRecords.length === 0}
-                            className="w-full"
-                            variant="outline"
-                          >
-                            {exporting ? (
-                              <>Exporting...</>
-                            ) : (
-                              <>
-                                <Download className="w-4 h-4 mr-2" />
-                                Export CSV
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </>
-                )}
-              </>
-            )}
-          </div>
+              {selectedVehicle && (
+                <MaintenanceStatsGrid
+                  totalCost={totalCost}
+                  serviceCount={serviceRecords.length}
+                  filteredRecordsCount={filteredRecords.length}
+                  maintenanceItemsCount={maintenanceItems.length}
+                />
+              )}
+            </>
+          )}
 
           {showServiceForm && selectedVehicleId && (
             <ServiceForm
@@ -398,6 +267,81 @@ export function ServiceHistory() {
               maintenanceItems={maintenanceItems}
               onSuccess={handleServiceComplete}
             />
+          )}
+
+          {/* Filters and Actions */}
+          {selectedVehicleId && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Filters & Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="lg:hidden">
+                    <label className="text-sm font-medium">Service Type</label>
+                    <Select value={filterType} onValueChange={setFilterType}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Services</SelectItem>
+                        {maintenanceItems.map((item) => (
+                          <SelectItem key={item._id} value={item._id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="hidden lg:block">
+                    <label className="text-sm font-medium">Service Type</label>
+                    <Select value={filterType} onValueChange={setFilterType}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Services</SelectItem>
+                        {maintenanceItems.map((item) => (
+                          <SelectItem key={item._id} value={item._id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="hidden lg:block">
+                    <label className="text-sm font-medium">Date</label>
+                    <Input
+                      type="month"
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value)}
+                      placeholder="Filter by date"
+                    />
+                  </div>
+                  <div className="hidden lg:block">
+                    <label className="text-sm font-medium">Search</label>
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search services or notes"
+                        className="pl-8"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <ExportButton
+                      vehicles={vehicles}
+                      selectedVehicleId={selectedVehicleId}
+                      onVehicleChange={setSelectedVehicleId}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 
@@ -535,7 +479,7 @@ export function ServiceHistory() {
             </CardContent>
           </Card>
         )}
-      </div>
+      </main>
     </div>
   )
 }
