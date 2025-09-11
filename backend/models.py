@@ -1,7 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson.objectid import ObjectId
 from pymongo import MongoClient
 import os
+import secrets
+import re
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # MongoDB connection (same as in app.py)
 client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker'))
@@ -16,31 +19,49 @@ class Vehicle:
             'year': data.get('year'),
             'current_mileage': data.get('current_mileage', 0),
             'purchase_mileage': data.get('purchase_mileage', 0),
+            'user_id': ObjectId(data.get('user_id')),
             'created_at': datetime.utcnow()
         }
         result = db.vehicles.insert_one(vehicle_data)
         return str(result.inserted_id)
     
     @staticmethod
-    def get_all_vehicles():
+    def get_all_vehicles(user_id=None):
+        """Get all vehicles for a user or all vehicles (for admin)"""
+        if user_id:
+            return list(db.vehicles.find({'user_id': ObjectId(user_id)}))
         return list(db.vehicles.find())
     
     @staticmethod
-    def get_vehicle_by_id(vehicle_id):
-        return db.vehicles.find_one({'_id': ObjectId(vehicle_id)})
+    def get_vehicle_by_id(vehicle_id, user_id=None):
+        """Get vehicle by ID with optional user verification"""
+        query = {'_id': ObjectId(vehicle_id)}
+        if user_id:
+            query['user_id'] = ObjectId(user_id)
+        return db.vehicles.find_one(query)
     
     @staticmethod
-    def update_vehicle(vehicle_id, data):
+    def update_vehicle(vehicle_id, data, user_id=None):
+        """Update vehicle with optional user verification"""
         update_data = {k: v for k, v in data.items() if k in ['make', 'model', 'year', 'current_mileage', 'purchase_mileage']}
+        query = {'_id': ObjectId(vehicle_id)}
+        if user_id:
+            query['user_id'] = ObjectId(user_id)
+        
         result = db.vehicles.update_one(
-            {'_id': ObjectId(vehicle_id)},
+            query,
             {'$set': update_data}
         )
         return result.modified_count > 0
     
     @staticmethod
-    def delete_vehicle(vehicle_id):
-        result = db.vehicles.delete_one({'_id': ObjectId(vehicle_id)})
+    def delete_vehicle(vehicle_id, user_id=None):
+        """Delete vehicle with optional user verification"""
+        query = {'_id': ObjectId(vehicle_id)}
+        if user_id:
+            query['user_id'] = ObjectId(user_id)
+        
+        result = db.vehicles.delete_one(query)
         return result.deleted_count > 0
 
 class MaintenanceItem:
@@ -293,3 +314,308 @@ class FillUp:
             'total_fillups': len(fillups),
             'last_fillup_date': max(f['date'] for f in fillups if f['date']) if fillups else None
         }
+
+class User:
+    @staticmethod
+    def create_user(data):
+        """Create a new user with hashed password and default subscription"""
+        # Validate email format
+        if not User.validate_email(data.get('email', '')):
+            raise ValueError('Invalid email format')
+        
+        # Validate password strength
+        if not User.validate_password(data.get('password', '')):
+            raise ValueError('Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character')
+        
+        # Check if user already exists
+        existing_user = db.users.find_one({'email': data.get('email')})
+        if existing_user:
+            raise ValueError('User with this email already exists')
+        
+        user_data = {
+            'email': data.get('email').lower().strip(),
+            'password_hash': generate_password_hash(data.get('password')),
+            'first_name': data.get('first_name', '').strip(),
+            'last_name': data.get('last_name', '').strip(),
+            'subscription_tier': 'free',  # free, premium, enterprise
+            'subscription_expires': None,
+            'is_verified': False,
+            'is_active': True,
+            'verification_token': secrets.token_urlsafe(32),
+            'password_reset_token': None,
+            'password_reset_expires': None,
+            'login_attempts': 0,
+            'locked_until': None,
+            'last_login': None,
+            'preferences': {
+                'currency': 'PHP',
+                'distance_unit': 'km',
+                'fuel_unit': 'L',
+                'timezone': 'Asia/Manila',
+                'email_notifications': True,
+                'dark_mode': False
+            },
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        }
+        
+        result = db.users.insert_one(user_data)
+        return str(result.inserted_id)
+    
+    @staticmethod
+    def authenticate_user(email, password):
+        """Authenticate user with rate limiting and account lockout"""
+        user = db.users.find_one({'email': email.lower().strip()})
+        
+        if not user:
+            return None
+        
+        # Check if account is locked
+        if user.get('locked_until') and user['locked_until'] > datetime.utcnow():
+            return None
+        
+        # Check if account is active
+        if not user.get('is_active', True):
+            return None
+        
+        # Verify password
+        if check_password_hash(user['password_hash'], password):
+            # Reset login attempts on successful login
+            db.users.update_one(
+                {'_id': user['_id']},
+                {'$set': {
+                    'login_attempts': 0,
+                    'locked_until': None,
+                    'last_login': datetime.utcnow(),
+                    'updated_at': datetime.utcnow()
+                }}
+            )
+            return user
+        else:
+            # Increment login attempts
+            attempts = user.get('login_attempts', 0) + 1
+            update_data = {
+                'login_attempts': attempts,
+                'updated_at': datetime.utcnow()
+            }
+            
+            # Lock account after 5 failed attempts
+            if attempts >= 5:
+                update_data['locked_until'] = datetime.utcnow() + timedelta(minutes=30)
+            
+            db.users.update_one(
+                {'_id': user['_id']},
+                {'$set': update_data}
+            )
+            return None
+    
+    @staticmethod
+    def get_user_by_id(user_id):
+        """Get user by ID, excluding sensitive data"""
+        user = db.users.find_one(
+            {'_id': ObjectId(user_id)},
+            projection={
+                'password_hash': 0,
+                'verification_token': 0,
+                'password_reset_token': 0
+            }
+        )
+        return user
+    
+    @staticmethod
+    def get_user_by_email(email):
+        """Get user by email, excluding sensitive data"""
+        user = db.users.find_one(
+            {'email': email.lower().strip()},
+            projection={
+                'password_hash': 0,
+                'verification_token': 0,
+                'password_reset_token': 0
+            }
+        )
+        return user
+    
+    @staticmethod
+    def update_user(user_id, data):
+        """Update user profile"""
+        allowed_fields = ['first_name', 'last_name', 'preferences']
+        update_data = {k: v for k, v in data.items() if k in allowed_fields}
+        
+        if update_data:
+            update_data['updated_at'] = datetime.utcnow()
+            result = db.users.update_one(
+                {'_id': ObjectId(user_id)},
+                {'$set': update_data}
+            )
+            return result.modified_count > 0
+        return False
+    
+    @staticmethod
+    def update_subscription(user_id, tier, expires=None):
+        """Update user subscription tier"""
+        update_data = {
+            'subscription_tier': tier,
+            'updated_at': datetime.utcnow()
+        }
+        
+        if expires:
+            update_data['subscription_expires'] = expires
+        
+        result = db.users.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': update_data}
+        )
+        return result.modified_count > 0
+    
+    @staticmethod
+    def set_password_reset_token(user_id):
+        """Generate and store password reset token"""
+        token = secrets.token_urlsafe(32)
+        expires = datetime.utcnow() + timedelta(hours=1)  # 1 hour expiry
+        
+        result = db.users.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': {
+                'password_reset_token': token,
+                'password_reset_expires': expires,
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        
+        if result.modified_count > 0:
+            return token
+        return None
+    
+    @staticmethod
+    def reset_password(user_id, new_password):
+        """Reset user password"""
+        if not User.validate_password(new_password):
+            raise ValueError('Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character')
+        
+        result = db.users.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': {
+                'password_hash': generate_password_hash(new_password),
+                'password_reset_token': None,
+                'password_reset_expires': None,
+                'login_attempts': 0,
+                'locked_until': None,
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        return result.modified_count > 0
+    
+    @staticmethod
+    def verify_email(user_id, token):
+        """Verify user email address"""
+        user = db.users.find_one({'_id': ObjectId(user_id)})
+        if not user or user.get('verification_token') != token:
+            return False
+        
+        result = db.users.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': {
+                'is_verified': True,
+                'verification_token': None,
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        return result.modified_count > 0
+    
+    @staticmethod
+    def validate_email(email):
+        """Validate email format"""
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return re.match(pattern, email) is not None
+    
+    @staticmethod
+    def validate_password(password):
+        """Validate password strength"""
+        if len(password) < 8:
+            return False
+        
+        # Check for uppercase, lowercase, number, and special character
+        has_upper = any(c.isupper() for c in password)
+        has_lower = any(c.islower() for c in password)
+        has_number = any(c.isdigit() for c in password)
+        has_special = any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in password)
+        
+        return has_upper and has_lower and has_number and has_special
+    
+    @staticmethod
+    def check_subscription_limits(user):
+        """Check if user has reached subscription limits"""
+        tier = user.get('subscription_tier', 'free')
+        
+        limits = {
+            'free': {'max_vehicles': 3, 'max_records_per_vehicle': 100},
+            'premium': {'max_vehicles': 10, 'max_records_per_vehicle': 500},
+            'enterprise': {'max_vehicles': -1, 'max_records_per_vehicle': -1}  # unlimited
+        }
+        
+        return limits.get(tier, limits['free'])
+
+class RefreshToken:
+    @staticmethod
+    def create_refresh_token(user_id):
+        """Create a new refresh token"""
+        token = secrets.token_urlsafe(64)
+        expires = datetime.utcnow() + timedelta(days=7)  # 7 days expiry
+        
+        # Delete existing tokens for this user
+        db.refresh_tokens.delete_many({'user_id': ObjectId(user_id)})
+        
+        token_data = {
+            'user_id': ObjectId(user_id),
+            'token': token,
+            'expires': expires,
+            'created_at': datetime.utcnow(),
+            'is_revoked': False
+        }
+        
+        result = db.refresh_tokens.insert_one(token_data)
+        return token if result.inserted_id else None
+    
+    @staticmethod
+    def get_refresh_token(token):
+        """Get refresh token by token string"""
+        return db.refresh_tokens.find_one({
+            'token': token,
+            'is_revoked': False,
+            'expires': {'$gt': datetime.utcnow()}
+        })
+    
+    @staticmethod
+    def revoke_refresh_token(token):
+        """Revoke a refresh token"""
+        result = db.refresh_tokens.update_one(
+            {'token': token},
+            {'$set': {
+                'is_revoked': True,
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        return result.modified_count > 0
+    
+    @staticmethod
+    def revoke_all_user_tokens(user_id):
+        """Revoke all refresh tokens for a user"""
+        result = db.refresh_tokens.update_many(
+            {'user_id': ObjectId(user_id)},
+            {'$set': {
+                'is_revoked': True,
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        return result.modified_count
+    
+    @staticmethod
+    def cleanup_expired_tokens():
+        """Clean up expired refresh tokens"""
+        result = db.refresh_tokens.delete_many({
+            '$or': [
+                {'expires': {'$lt': datetime.utcnow()}},
+                {'is_revoked': True}
+            ]
+        })
+        return result.deleted_count

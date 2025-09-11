@@ -1,0 +1,362 @@
+import re
+import html
+from functools import wraps
+from flask import request, jsonify
+from email_validator import validate_email as email_validate, EmailNotValidError
+
+# Input validation utilities
+def validate_email(email):
+    """Validate email address"""
+    try:
+        email_validate(email)
+        return True
+    except EmailNotValidError:
+        return False
+
+def validate_password(password):
+    """Validate password strength"""
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    
+    # Check for uppercase, lowercase, number, and special character
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_number = any(c.isdigit() for c in password)
+    has_special = any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in password)
+    
+    if not has_upper:
+        return False, "Password must contain at least one uppercase letter"
+    if not has_lower:
+        return False, "Password must contain at least one lowercase letter"
+    if not has_number:
+        return False, "Password must contain at least one number"
+    if not has_special:
+        return False, "Password must contain at least one special character"
+    
+    return True, "Password is valid"
+
+def validate_vehicle_data(data):
+    """Validate vehicle data"""
+    errors = []
+    
+    # Validate required fields
+    required_fields = ['make', 'model', 'year', 'current_mileage']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            errors.append(f'{field} is required')
+    
+    # Validate make
+    if 'make' in data and data['make']:
+        if len(data['make'].strip()) < 2:
+            errors.append('Make must be at least 2 characters long')
+        elif len(data['make'].strip()) > 50:
+            errors.append('Make must be less than 50 characters long')
+    
+    # Validate model
+    if 'model' in data and data['model']:
+        if len(data['model'].strip()) < 2:
+            errors.append('Model must be at least 2 characters long')
+        elif len(data['model'].strip()) > 50:
+            errors.append('Model must be less than 50 characters long')
+    
+    # Validate year
+    if 'year' in data and data['year']:
+        try:
+            year = int(data['year'])
+            current_year = 2024  # Update this dynamically
+            if year < 1900 or year > current_year + 1:
+                errors.append('Year must be between 1900 and next year')
+        except (ValueError, TypeError):
+            errors.append('Year must be a valid number')
+    
+    # Validate current mileage
+    if 'current_mileage' in data and data['current_mileage']:
+        try:
+            mileage = float(data['current_mileage'])
+            if mileage < 0:
+                errors.append('Current mileage cannot be negative')
+            elif mileage > 10000000:  # 10 million km
+                errors.append('Current mileage seems too high')
+        except (ValueError, TypeError):
+            errors.append('Current mileage must be a valid number')
+    
+    # Validate purchase mileage
+    if 'purchase_mileage' in data and data['purchase_mileage']:
+        try:
+            purchase_mileage = float(data['purchase_mileage'])
+            if purchase_mileage < 0:
+                errors.append('Purchase mileage cannot be negative')
+            elif purchase_mileage > 10000000:
+                errors.append('Purchase mileage seems too high')
+            
+            # Check if purchase mileage is greater than current mileage
+            current_mileage = float(data.get('current_mileage', 0))
+            if purchase_mileage > current_mileage:
+                errors.append('Purchase mileage cannot be greater than current mileage')
+        except (ValueError, TypeError):
+            errors.append('Purchase mileage must be a valid number')
+    
+    return errors
+
+def validate_maintenance_data(data):
+    """Validate maintenance item data"""
+    errors = []
+    
+    # Validate required fields
+    required_fields = ['name', 'category', 'interval_km']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            errors.append(f'{field} is required')
+    
+    # Validate name
+    if 'name' in data and data['name']:
+        if len(data['name'].strip()) < 2:
+            errors.append('Name must be at least 2 characters long')
+        elif len(data['name'].strip()) > 100:
+            errors.append('Name must be less than 100 characters long')
+    
+    # Validate category
+    if 'category' in data and data['category']:
+        valid_categories = ['Engine', 'Transmission', 'Brakes', 'Suspension', 'Electrical', 
+                          'Tires', 'Fluids', 'Filters', 'Body', 'Interior', 'Other']
+        if data['category'] not in valid_categories:
+            errors.append(f'Category must be one of: {", ".join(valid_categories)}')
+    
+    # Validate interval_km
+    if 'interval_km' in data and data['interval_km']:
+        try:
+            interval = float(data['interval_km'])
+            if interval <= 0:
+                errors.append('Interval must be greater than 0')
+            elif interval > 1000000:  # 1 million km
+                errors.append('Interval seems too large')
+        except (ValueError, TypeError):
+            errors.append('Interval must be a valid number')
+    
+    return errors
+
+def validate_service_data(data):
+    """Validate service record data"""
+    errors = []
+    
+    # Validate required fields
+    required_fields = ['vehicle_id', 'maintenance_item_id', 'date', 'mileage']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            errors.append(f'{field} is required')
+    
+    # Validate date
+    if 'date' in data and data['date']:
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', data['date']):
+            errors.append('Date must be in YYYY-MM-DD format')
+    
+    # Validate mileage
+    if 'mileage' in data and data['mileage']:
+        try:
+            mileage = float(data['mileage'])
+            if mileage < 0:
+                errors.append('Mileage cannot be negative')
+            elif mileage > 10000000:
+                errors.append('Mileage seems too high')
+        except (ValueError, TypeError):
+            errors.append('Mileage must be a valid number')
+    
+    # Validate cost
+    if 'cost' in data and data['cost']:
+        try:
+            cost = float(data['cost'])
+            if cost < 0:
+                errors.append('Cost cannot be negative')
+            elif cost > 1000000:  # 1 million currency units
+                errors.append('Cost seems too high')
+        except (ValueError, TypeError):
+            errors.append('Cost must be a valid number')
+    
+    return errors
+
+def validate_fillup_data(data):
+    """Validate fill-up data"""
+    errors = []
+    
+    # Validate required fields
+    required_fields = ['vehicle_id', 'date', 'odometer_km', 'liters', 'price_per_liter']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            errors.append(f'{field} is required')
+    
+    # Validate date
+    if 'date' in data and data['date']:
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', data['date']):
+            errors.append('Date must be in YYYY-MM-DD format')
+    
+    # Validate odometer
+    if 'odometer_km' in data and data['odometer_km']:
+        try:
+            odometer = float(data['odometer_km'])
+            if odometer <= 0:
+                errors.append('Odometer reading must be greater than 0')
+            elif odometer > 10000000:
+                errors.append('Odometer reading seems too high')
+        except (ValueError, TypeError):
+            errors.append('Odometer reading must be a valid number')
+    
+    # Validate liters
+    if 'liters' in data and data['liters']:
+        try:
+            liters = float(data['liters'])
+            if liters <= 0:
+                errors.append('Liters must be greater than 0')
+            elif liters > 1000:  # 1000 liters
+                errors.append('Liters amount seems too high')
+        except (ValueError, TypeError):
+            errors.append('Liters must be a valid number')
+    
+    # Validate price per liter
+    if 'price_per_liter' in data and data['price_per_liter']:
+        try:
+            price = float(data['price_per_liter'])
+            if price <= 0:
+                errors.append('Price per liter must be greater than 0')
+            elif price > 10000:  # 10,000 per liter
+                errors.append('Price per liter seems too high')
+        except (ValueError, TypeError):
+            errors.append('Price per liter must be a valid number')
+    
+    # Validate total cost
+    if 'total_cost' in data and data['total_cost']:
+        try:
+            total_cost = float(data['total_cost'])
+            if total_cost < 0:
+                errors.append('Total cost cannot be negative')
+            elif total_cost > 1000000:  # 1 million currency units
+                errors.append('Total cost seems too high')
+        except (ValueError, TypeError):
+            errors.append('Total cost must be a valid number')
+    
+    return errors
+
+# Security decorators
+def validate_json_request(f):
+    """Validate JSON request"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not request.is_json:
+            return jsonify({'error': 'Request must be JSON'}), 400
+        
+        try:
+            data = request.get_json()
+            if data is None:
+                return jsonify({'error': 'Invalid JSON data'}), 400
+        except Exception as e:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+        
+        return f(*args, **kwargs)
+    return decorated
+
+def sanitize_input(data):
+    """Sanitize input data to prevent XSS attacks"""
+    if isinstance(data, str):
+        return html.escape(data.strip())
+    elif isinstance(data, dict):
+        return {key: sanitize_input(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_input(item) for item in data]
+    else:
+        return data
+
+def sanitize_request_data(f):
+    """Sanitize request data"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if request.is_json:
+            data = request.get_json()
+            sanitized_data = sanitize_input(data)
+            request._cached_json = (sanitized_data, request._cached_json[1])
+        
+        return f(*args, **kwargs)
+    return decorated
+
+# Security headers middleware
+def add_security_headers(response):
+    """Add security headers to response"""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    
+    # Remove server info
+    response.headers['Server'] = 'Car Maintenance Tracker'
+    
+    return response
+
+# Content Security Policy (CSP)
+def get_csp_headers():
+    """Get Content Security Policy headers"""
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "base-uri 'self';"
+    )
+    
+    return {
+        'Content-Security-Policy': csp,
+        'X-Content-Security-Policy': csp
+    }
+
+# Database query validation
+def validate_object_id(id_string):
+    """Validate MongoDB ObjectId"""
+    from bson.objectid import ObjectId
+    
+    try:
+        ObjectId(id_string)
+        return True
+    except:
+        return False
+
+def validate_user_id(user_id):
+    """Validate user ID"""
+    if not user_id or not validate_object_id(user_id):
+        return False
+    
+    from models import User
+    user = User.get_user_by_id(user_id)
+    return user is not None
+
+# Input validation result helper
+def validation_result(errors):
+    """Return standardized validation result"""
+    if errors:
+        return {
+            'valid': False,
+            'errors': errors
+        }
+    return {
+        'valid': True,
+        'errors': []
+    }
+
+# Security logging
+def log_security_event(event_type, user_id=None, ip_address=None, details=None):
+    """Log security events"""
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    log_data = {
+        'event_type': event_type,
+        'timestamp': datetime.utcnow().isoformat(),
+        'user_id': user_id,
+        'ip_address': ip_address or request.remote_addr,
+        'user_agent': request.headers.get('User-Agent', ''),
+        'details': details or {}
+    }
+    
+    logger.warning(f"Security Event: {log_data}")

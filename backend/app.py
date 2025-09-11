@@ -12,7 +12,23 @@ from flask_swagger_ui import get_swaggerui_blueprint
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+# Enhanced CORS configuration
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://localhost:3000",  # Frontend dev
+            "http://localhost:8080",  # Frontend prod
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8080"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["Content-Type"],
+        "supports_credentials": True,
+        "max_age": 3600
+    }
+})
 
 # Swagger UI configuration
 SWAGGER_URL = '/api/docs'
@@ -721,9 +737,24 @@ class MongoJSONEncoder(json.JSONEncoder):
 
 app.json_encoder = MongoJSONEncoder
 
+# Security middleware
+from security import add_security_headers, get_csp_headers
+
+@app.after_request
+def add_security_headers_middleware(response):
+    """Add security headers to all responses"""
+    response = add_security_headers(response)
+    
+    # Add CSP headers
+    csp_headers = get_csp_headers()
+    for header, value in csp_headers.items():
+        response.headers[header] = value
+    
+    return response
+
 # Import routes
 from routes import vehicles, maintenance, services, dashboard
-from routes import fillups, export
+from routes import fillups, export, auth
 
 # Register blueprints
 app.register_blueprint(vehicles.bp, url_prefix='/api/vehicles')
@@ -732,6 +763,7 @@ app.register_blueprint(services.bp, url_prefix='/api/services')
 app.register_blueprint(dashboard.bp, url_prefix='/api/dashboard')
 app.register_blueprint(fillups.bp, url_prefix='/api/fillups')
 app.register_blueprint(export.bp, url_prefix='/api/export')
+app.register_blueprint(auth.bp, url_prefix='/api/auth')
 
 @app.route('/health')
 def health_check():

@@ -4,6 +4,9 @@ from bson.objectid import ObjectId
 from datetime import datetime
 import csv
 import io
+from auth import token_required, get_current_user_id, check_subscription_limits
+from security import validate_vehicle_data, validation_result, validate_json_request, sanitize_request_data
+from rate_limiter import user_rate_limit
 
 bp = Blueprint('vehicles', __name__)
 
@@ -16,9 +19,13 @@ def serialize_vehicle(vehicle):
     return vehicle
 
 @bp.route('', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_vehicles():
     try:
-        vehicles = Vehicle.get_all_vehicles()
+        user_id = get_current_user_id()
+        vehicles = Vehicle.get_all_vehicles(user_id)
+        
         # Serialize each vehicle to handle ObjectId and datetime
         serialized_vehicles = [serialize_vehicle(vehicle) for vehicle in vehicles]
         return jsonify(serialized_vehicles), 200
@@ -26,15 +33,20 @@ def get_vehicles():
         return jsonify({'error': str(e)}), 500
 
 @bp.route('', methods=['POST'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
+@check_subscription_limits('vehicles')
 def add_vehicle():
     try:
         data = request.get_json()
         
-        # Validate required fields
-        required_fields = ['make', 'model', 'year', 'current_mileage']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({'error': f'Missing required field: {field}'}), 400
+        # Add user_id to data
+        data['user_id'] = get_current_user_id()
+        
+        # Validate input
+        validation = validation_result(validate_vehicle_data(data))
+        if not validation['valid']:
+            return jsonify({'error': 'Validation failed', 'details': validation['errors']}), 400
         
         # Create vehicle
         vehicle_id = Vehicle.create_vehicle(data)
@@ -49,11 +61,19 @@ def add_vehicle():
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<vehicle_id>', methods=['PUT'])
+@token_required
+@user_rate_limit(limit=30, window_seconds=60)
 def update_vehicle(vehicle_id):
     try:
+        user_id = get_current_user_id()
         data = request.get_json()
         
-        if Vehicle.update_vehicle(vehicle_id, data):
+        # Validate input
+        validation = validation_result(validate_vehicle_data(data))
+        if not validation['valid']:
+            return jsonify({'error': 'Validation failed', 'details': validation['errors']}), 400
+        
+        if Vehicle.update_vehicle(vehicle_id, data, user_id):
             return jsonify({'message': 'Vehicle updated successfully'}), 200
         else:
             return jsonify({'error': 'Vehicle not found'}), 404
@@ -62,9 +82,13 @@ def update_vehicle(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<vehicle_id>', methods=['DELETE'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
 def delete_vehicle(vehicle_id):
     try:
-        if Vehicle.delete_vehicle(vehicle_id):
+        user_id = get_current_user_id()
+        
+        if Vehicle.delete_vehicle(vehicle_id, user_id):
             return jsonify({'message': 'Vehicle deleted successfully'}), 200
         else:
             return jsonify({'error': 'Vehicle not found'}), 404
@@ -73,16 +97,28 @@ def delete_vehicle(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<vehicle_id>/create-maintenance-items', methods=['POST'])
+@token_required
+@user_rate_limit(limit=5, window_seconds=60)
 def create_maintenance_items(vehicle_id):
     try:
+        user_id = get_current_user_id()
+        
+        # Verify vehicle belongs to user
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
         MaintenanceItem.create_default_maintenance_items(vehicle_id)
         return jsonify({'message': 'Maintenance items created successfully'}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<vehicle_id>/mileage', methods=['PATCH'])
+@token_required
+@user_rate_limit(limit=50, window_seconds=60)
 def update_mileage(vehicle_id):
     try:
+        user_id = get_current_user_id()
         data = request.get_json()
         
         if 'current_mileage' not in data:
@@ -94,7 +130,7 @@ def update_mileage(vehicle_id):
             return jsonify({'error': 'Mileage must be a positive number'}), 400
         
         # Get current vehicle to validate mileage is not decreasing
-        current_vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        current_vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not current_vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         
@@ -104,7 +140,7 @@ def update_mileage(vehicle_id):
         
         # Update mileage
         update_data = {'current_mileage': new_mileage}
-        if Vehicle.update_vehicle(vehicle_id, update_data):
+        if Vehicle.update_vehicle(vehicle_id, update_data, user_id):
             return jsonify({'message': 'Mileage updated successfully', 'current_mileage': new_mileage}), 200
         else:
             return jsonify({'error': 'Vehicle not found'}), 404
@@ -113,11 +149,15 @@ def update_mileage(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/export/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
 def export_vehicle_info(vehicle_id):
     """Export vehicle information to CSV format"""
     try:
+        user_id = get_current_user_id()
+        
         # Get vehicle info
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         

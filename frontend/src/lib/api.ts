@@ -2,6 +2,7 @@ import axios from 'axios';
 import { Vehicle, MaintenanceItem, ServiceRecord, DashboardData, FuelRecord, FuelPerformanceMetrics as FuelPerformanceMetricsType, FuelMaintenanceInsightsData } from '../types';
 import { cachedFetch, CACHE_KEYS, CACHE_EXPIRY, invalidateVehicleCache } from './cache';
 import { debounce } from './debounce';
+import { getAccessToken, refreshToken, getAuthHeader, storeTokens, handleApiError } from './auth';
 
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD 
   ? '/api'  // Production: proxy through nginx
@@ -15,12 +16,25 @@ const axiosInstance = axios.create({
   },
 });
 
-// Request interceptor for logging
+// Request interceptor for authentication and logging
 axiosInstance.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // Add authentication header
+    const authHeader = getAuthHeader();
+    if (authHeader.Authorization) {
+      config.headers.Authorization = authHeader.Authorization;
+    }
+    
+    // Add CSRF token if available
+    const csrfToken = localStorage.getItem('csrf_token');
+    if (csrfToken) {
+      config.headers['X-CSRF-Token'] = csrfToken;
+    }
+    
     if (import.meta.env.DEV) {
       console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
     }
+    
     return config;
   },
   (error) => {
@@ -29,18 +43,47 @@ axiosInstance.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor for error handling and token refresh
 axiosInstance.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // Handle 401 errors (unauthorized)
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      try {
+        // Try to refresh the token
+        const refreshSuccess = await refreshToken();
+        
+        if (refreshSuccess) {
+          // Update the authorization header with new token
+          const authHeader = getAuthHeader();
+          if (authHeader.Authorization) {
+            originalRequest.headers.Authorization = authHeader.Authorization;
+          }
+          
+          // Retry the original request
+          return axiosInstance(originalRequest);
+        } else {
+          // Refresh failed, logout user
+          localStorage.removeItem('car_maintenance_tracker_user_data');
+          window.location.href = '/login';
+          return Promise.reject(new Error('Session expired. Please login again.'));
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+        localStorage.removeItem('car_maintenance_tracker_user_data');
+        window.location.href = '/login';
+        return Promise.reject(new Error('Session expired. Please login again.'));
+      }
+    }
+    
+    // Handle other errors
     if (error.code === 'ECONNABORTED') {
       console.error('Request timeout:', error.config?.url);
       return Promise.reject(new Error('Request timeout. Please try again.'));
-    }
-    
-    if (error.response?.status === 401) {
-      console.error('Unauthorized access');
-      return Promise.reject(new Error('Unauthorized access'));
     }
     
     if (error.response?.status >= 500) {
@@ -211,6 +254,259 @@ export const api = {
     CACHE_EXPIRY.DASHBOARD_DATA,
     true // Use memory cache for frequent access
   ),
+
+  // Authentication endpoints
+  auth: {
+    // Login
+    login: async (credentials: { email: string; password: string; remember_me?: boolean }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/login`, credentials);
+      return response.data;
+    },
+
+    // Register
+    register: async (data: { 
+      email: string; 
+      password: string; 
+      first_name: string; 
+      last_name: string; 
+      phone?: string;
+      timezone?: string;
+      accept_terms: boolean;
+      newsletter_opt_in?: boolean;
+    }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/register`, data);
+      return response.data;
+    },
+
+    // Logout
+    logout: async (data?: { refresh_token?: string }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/logout`, data);
+      return response.data;
+    },
+
+    // Refresh token
+    refreshToken: async (data: { refresh_token: string }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/refresh-token`, data);
+      return response.data;
+    },
+
+    // Update profile
+    updateProfile: async (data: Partial<{
+      first_name: string;
+      last_name: string;
+      email: string;
+      phone: string;
+      timezone: string;
+      preferences: {
+        theme: 'light' | 'dark' | 'system';
+        notifications: {
+          email: boolean;
+          push: boolean;
+          maintenance_reminders: boolean;
+          fuel_alerts: boolean;
+          subscription_reminders: boolean;
+        };
+        currency: string;
+        distance_unit: 'km' | 'mi';
+        fuel_unit: 'L' | 'gal';
+        timezone: string;
+        language: string;
+      };
+    }>) => {
+      const response = await axiosInstance.put(`${API_BASE}/auth/profile`, data);
+      return response.data;
+    },
+
+    // Change password
+    changePassword: async (data: { current_password: string; new_password: string; confirm_password: string }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/change-password`, data);
+      return response.data;
+    },
+
+    // Forgot password
+    forgotPassword: async (data: { email: string }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/forgot-password`, data);
+      return response.data;
+    },
+
+    // Reset password
+    resetPassword: async (data: { token: string; password: string; confirm_password: string }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/reset-password`, data);
+      return response.data;
+    },
+
+    // Verify email
+    verifyEmail: async (data: { token: string }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/verify-email`, data);
+      return response.data;
+    },
+
+    // Request email verification
+    requestEmailVerification: async () => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/request-email-verification`);
+      return response.data;
+    },
+
+    // Get subscription info
+    getSubscription: async () => {
+      const response = await axiosInstance.get(`${API_BASE}/auth/subscription`);
+      return response.data;
+    },
+
+    // Update subscription
+    updateSubscription: async (data: { tier: string; payment_method_id?: string }) => {
+      const response = await axiosInstance.put(`${API_BASE}/auth/subscription`, data);
+      return response.data;
+    },
+
+    // Cancel subscription
+    cancelSubscription: async () => {
+      const response = await axiosInstance.delete(`${API_BASE}/auth/subscription`);
+      return response.data;
+    },
+
+    // Reactivate subscription
+    reactivateSubscription: async () => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/subscription/reactivate`);
+      return response.data;
+    },
+
+    // Get subscription plans
+    getSubscriptionPlans: async () => {
+      const response = await axiosInstance.get(`${API_BASE}/auth/subscription/plans`);
+      return response.data;
+    },
+
+    // Get user profile
+    getProfile: async () => {
+      const response = await axiosInstance.get(`${API_BASE}/auth/profile`);
+      return response.data;
+    },
+
+    // Get usage stats
+    getUsageStats: async () => {
+      const response = await axiosInstance.get(`${API_BASE}/auth/usage-stats`);
+      return response.data;
+    },
+
+    // Get activity log
+    getActivityLog: async (limit?: number, offset?: number) => {
+      const response = await axiosInstance.get(`${API_BASE}/auth/activity-log`, {
+        params: { limit, offset }
+      });
+      return response.data;
+    },
+
+    // Update security settings
+    updateSecuritySettings: async (data: {
+      two_factor_enabled?: boolean;
+      login_notifications?: boolean;
+      session_timeout?: number;
+    }) => {
+      const response = await axiosInstance.put(`${API_BASE}/auth/security-settings`, data);
+      return response.data;
+    },
+
+    // Get security settings
+    getSecuritySettings: async () => {
+      const response = await axiosInstance.get(`${API_BASE}/auth/security-settings`);
+      return response.data;
+    },
+
+    // Social login
+    socialLogin: async (data: { provider: string; access_token: string; email?: string; first_name?: string; last_name?: string }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/social-login`, data);
+      return response.data;
+    },
+
+    // Social login callback
+    socialLoginCallback: async (data: { provider: string; code: string; state?: string }) => {
+      const response = await axiosInstance.post(`${API_BASE}/auth/social-login/callback`, data);
+      return response.data;
+    },
+  },
+
+  // Payment endpoints
+  payments: {
+    // Get payment methods
+    getPaymentMethods: async () => {
+      const response = await axiosInstance.get(`${API_BASE}/payments/methods`);
+      return response.data;
+    },
+
+    // Add payment method
+    addPaymentMethod: async (data: { payment_method_id: string; is_default?: boolean }) => {
+      const response = await axiosInstance.post(`${API_BASE}/payments/methods`, data);
+      return response.data;
+    },
+
+    // Remove payment method
+    removePaymentMethod: async (paymentMethodId: string) => {
+      const response = await axiosInstance.delete(`${API_BASE}/payments/methods/${paymentMethodId}`);
+      return response.data;
+    },
+
+    // Set default payment method
+    setDefaultPaymentMethod: async (paymentMethodId: string) => {
+      const response = await axiosInstance.put(`${API_BASE}/payments/methods/${paymentMethodId}/default`);
+      return response.data;
+    },
+
+    // Get invoices
+    getInvoices: async (limit?: number, offset?: number) => {
+      const response = await axiosInstance.get(`${API_BASE}/payments/invoices`, {
+        params: { limit, offset }
+      });
+      return response.data;
+    },
+
+    // Get invoice PDF
+    getInvoicePdf: async (invoiceId: string) => {
+      const response = await axiosInstance.get(`${API_BASE}/payments/invoices/${invoiceId}/pdf`, {
+        responseType: 'blob'
+      });
+      return response.data;
+    },
+
+    // Get payment history
+    getPaymentHistory: async () => {
+      const response = await axiosInstance.get(`${API_BASE}/payments/history`);
+      return response.data;
+    },
+  },
+
+  // Webhook endpoints (for real-time updates)
+  webhooks: {
+    // Create webhook
+    createWebhook: async (data: { url: string; events: string[]; secret?: string }) => {
+      const response = await axiosInstance.post(`${API_BASE}/webhooks`, data);
+      return response.data;
+    },
+
+    // Get webhooks
+    getWebhooks: async () => {
+      const response = await axiosInstance.get(`${API_BASE}/webhooks`);
+      return response.data;
+    },
+
+    // Update webhook
+    updateWebhook: async (webhookId: string, data: { url?: string; events?: string[]; secret?: string; is_active?: boolean }) => {
+      const response = await axiosInstance.put(`${API_BASE}/webhooks/${webhookId}`, data);
+      return response.data;
+    },
+
+    // Delete webhook
+    deleteWebhook: async (webhookId: string) => {
+      const response = await axiosInstance.delete(`${API_BASE}/webhooks/${webhookId}`);
+      return response.data;
+    },
+
+    // Test webhook
+    testWebhook: async (webhookId: string) => {
+      const response = await axiosInstance.post(`${API_BASE}/webhooks/${webhookId}/test`);
+      return response.data;
+    },
+  },
 };
 
 // Debounced search functions
