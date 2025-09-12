@@ -17,7 +17,7 @@ def migrate_vehicles_to_user_system():
     """Migrate existing vehicles to user-based system"""
     
     # Connect to MongoDB
-    client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker'))
+    client = MongoClient(os.getenv('MONGODB_URI'))
     db = client.get_default_database()
     
     print("Starting migration of vehicles to user-based system...")
@@ -120,7 +120,7 @@ def migrate_vehicles_to_user_system():
 def migrate_other_collections():
     """Migrate other collections (maintenance_items, service_records, fillups) to include user_id"""
     
-    client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker'))
+    client = MongoClient(os.getenv('MONGODB_URI'))
     db = client.get_default_database()
     
     print("\nStarting migration of other collections...")
@@ -189,7 +189,7 @@ def migrate_other_collections():
 def validate_migration():
     """Validate that migration was successful"""
     
-    client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker'))
+    client = MongoClient(os.getenv('MONGODB_URI'))
     db = client.get_default_database()
     
     print("\nValidating migration...")
@@ -215,7 +215,7 @@ def validate_migration():
 def rollback_migration():
     """Rollback migration (remove user_id from all collections)"""
     
-    client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker'))
+    client = MongoClient(os.getenv('MONGODB_URI'))
     db = client.get_default_database()
     
     print("\nRolling back migration...")

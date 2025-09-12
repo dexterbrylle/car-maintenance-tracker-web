@@ -2,7 +2,9 @@ import React, { Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Dashboard } from './pages/Dashboard'
 import { AuthProvider } from './contexts/AuthContext'
-import { ProtectedRoute, useFeatureAccess, useAuth } from './components/auth/ProtectedRoute'
+import { ErrorProvider } from './contexts/ErrorContext'
+import { ProtectedRoute, useFeatureAccess } from './components/auth/ProtectedRoute'
+import { useAuth } from './contexts/AuthContext'
 
 // Lazy load components for better performance
 const LazyVehicles = React.lazy(() => import('./pages/Vehicles').then(module => ({ default: module.Vehicles })))
@@ -57,7 +59,8 @@ function Navigation() {
             <span className="font-semibold text-lg">Maintenance Tracker</span>
           </div>
           
-          {isAuthenticated ? (
+          <div className="flex items-center space-x-4">
+            {isAuthenticated ? (
             <div className="flex items-center space-x-4">
               <Button
                 variant="ghost"
@@ -155,6 +158,7 @@ function Navigation() {
               </Button>
             </div>
           )}
+          </div>
         </div>
       </div>
     </nav>
@@ -164,14 +168,15 @@ function Navigation() {
 function App() {
   return (
     <ToastProvider>
-      <AuthProvider>
-        <Router future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true
-        }}>
-          <div className="min-h-screen bg-background">
-            <Navigation />
-            <main className="pb-20 md:pb-0">
+      <ErrorProvider>
+        <AuthProvider>
+          <Router future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true
+          }}>
+            <div className="min-h-screen bg-background">
+              <Navigation />
+              <main className="pb-20 md:pb-0">
               <Routes>
                 {/* Public Routes (Authentication) */}
                 <Route path="/login" element={
@@ -281,8 +286,9 @@ function App() {
             {/* Mobile Navigation */}
             <MobileNavigation />
           </div>
-        </Router>
-      </AuthProvider>
+          </Router>
+        </AuthProvider>
+      </ErrorProvider>
     </ToastProvider>
   )
 }

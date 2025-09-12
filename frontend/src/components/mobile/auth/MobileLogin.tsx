@@ -228,10 +228,10 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onSuccess }) => {
                       id="remember_me"
                       name="remember_me"
                       checked={formData.remember_me}
-                      onCheckedChange={(checked) => {
+                      onChange={(e) => {
                         setFormData(prev => ({
                           ...prev,
-                          remember_me: checked as boolean,
+                          remember_me: e.target.checked as boolean,
                         }));
                       }}
                       disabled={isLoading}

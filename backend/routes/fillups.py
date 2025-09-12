@@ -1,6 +1,9 @@
 from flask import Blueprint, request, jsonify
-from models import FillUp
+from models import FillUp, Vehicle
 from utils.fuel_calculations import validate_fillup_data, calculate_monthly_fuel_cost
+from auth import token_required, get_current_user_id, check_subscription_limits
+from security import validate_json_request, sanitize_request_data
+from rate_limiter import user_rate_limit
 import os
 from datetime import datetime
 import csv
@@ -9,9 +12,13 @@ import io
 bp = Blueprint('fillups', __name__)
 
 @bp.route('', methods=['POST'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
+@check_subscription_limits('records')
 def add_fillup():
     """Add a new fill-up record"""
     try:
+        user_id = get_current_user_id()
         data = request.get_json()
         
         # Validate required fields
@@ -19,6 +26,11 @@ def add_fillup():
         for field in required_fields:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(data['vehicle_id'], user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
         
         # Additional validation
         validation_error = validate_fillup_data(data)
@@ -51,9 +63,18 @@ def add_fillup():
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_fillups(vehicle_id):
     """Get all fill-ups for a vehicle"""
     try:
+        user_id = get_current_user_id()
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
         # Get pagination parameters
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 50))
@@ -71,7 +92,7 @@ def get_fillups(vehicle_id):
         
         # Get total count for pagination
         from pymongo import MongoClient
-        client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker'))
+        client = MongoClient(os.getenv('MONGODB_URI'))
         db = client.get_default_database()
         total_count = db.fill_ups.count_documents({'vehicle_id': vehicle_id})
         
@@ -89,10 +110,23 @@ def get_fillups(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<fillup_id>', methods=['PUT'])
+@token_required
+@user_rate_limit(limit=30, window_seconds=60)
 def update_fillup(fillup_id):
     """Update a fill-up record"""
     try:
+        user_id = get_current_user_id()
         data = request.get_json()
+        
+        # Get fillup record to verify ownership
+        fillup = FillUp.get_fillup_by_id(fillup_id)
+        if not fillup:
+            return jsonify({'error': 'Fill-up not found'}), 404
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(str(fillup['vehicle_id']), user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
         
         # Validate the data
         validation_error = validate_fillup_data(data, is_update=True)
@@ -128,9 +162,23 @@ def update_fillup(fillup_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<fillup_id>', methods=['DELETE'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
 def delete_fillup(fillup_id):
     """Delete a fill-up record"""
     try:
+        user_id = get_current_user_id()
+        
+        # Get fillup record to verify ownership
+        fillup = FillUp.get_fillup_by_id(fillup_id)
+        if not fillup:
+            return jsonify({'error': 'Fill-up not found'}), 404
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(str(fillup['vehicle_id']), user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
         success = FillUp.delete_fillup(fillup_id)
         
         if not success:
@@ -142,9 +190,18 @@ def delete_fillup(fillup_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/stats/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_fuel_stats(vehicle_id):
     """Get fuel statistics for a vehicle"""
     try:
+        user_id = get_current_user_id()
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
         stats = FillUp.get_fuel_stats(vehicle_id)
         
         # If no stats exist, return default/empty values instead of 404
@@ -169,9 +226,18 @@ def get_fuel_stats(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/recent/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_recent_fillups(vehicle_id):
     """Get recent fill-ups for dashboard display"""
     try:
+        user_id = get_current_user_id()
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
         limit = int(request.args.get('limit', 5))
         fillups = FillUp.get_fillups_by_vehicle(vehicle_id, limit=limit)
         
@@ -188,17 +254,20 @@ def get_recent_fillups(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/export/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
 def export_fuel_history(vehicle_id):
     """Export fuel history to CSV format"""
     try:
+        user_id = get_current_user_id()
+        
         # Get query parameters
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         columns = request.args.getlist('columns')
         
-        # Get vehicle info
-        from models import Vehicle
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        # Get vehicle info and verify ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         

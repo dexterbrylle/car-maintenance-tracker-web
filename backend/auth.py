@@ -1,15 +1,84 @@
 from functools import wraps
-from flask import request, jsonify
+from flask import request, jsonify, g
 import jwt
 import os
 from datetime import datetime, timedelta
 from bson.objectid import ObjectId
 from models import User, RefreshToken
 
+def serialize_user(user):
+    """Convert MongoDB user document to JSON-serializable format"""
+    if not user:
+        return user
+    
+    # Create a copy to avoid modifying the original
+    serialized_user = user.copy()
+    
+    # Convert ObjectId to string
+    if '_id' in serialized_user:
+        serialized_user['_id'] = str(serialized_user['_id'])
+    
+    # Convert datetime fields to ISO format
+    datetime_fields = ['created_at', 'updated_at', 'last_login', 'subscription_expires', 'password_reset_expires']
+    for field in datetime_fields:
+        if field in serialized_user and serialized_user[field]:
+            serialized_user[field] = serialized_user[field].isoformat()
+    
+    return serialized_user
+
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
 JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)  # 1 hour
 JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=7)  # 7 days
+JWT_ALGORITHM = 'HS256'
+
+# Core Authentication Functions
+def generate_tokens(user_id, additional_claims=None):
+    """Generate both access and refresh tokens"""
+    access_token = create_access_token(user_id, additional_claims)
+    refresh_token = RefreshToken.create_refresh_token(user_id)
+    
+    if not refresh_token:
+        raise Exception('Failed to create refresh token')
+    
+    return {
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'access_token_expires': int(JWT_ACCESS_TOKEN_EXPIRES.total_seconds()),
+        'refresh_token_expires': int(JWT_REFRESH_TOKEN_EXPIRES.total_seconds())
+    }
+
+def verify_token(token):
+    """Verify JWT token and return payload"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+    except Exception:
+        return None
+
+def hash_password(password):
+    """Hash password using bcrypt with rounds=12"""
+    return User.hash_password(password)
+
+def verify_password(password, password_hash):
+    """Verify password against bcrypt hash"""
+    return User.verify_password(password, password_hash)
+
+def create_user(user_data):
+    """Create a new user with proper validation"""
+    return User.create_user(user_data)
+
+def get_user_by_email(email):
+    """Get user by email"""
+    return User.get_user_by_email(email)
+
+def get_user_by_id(user_id):
+    """Get user by ID"""
+    return User.get_user_by_id(user_id)
 
 def create_access_token(user_id, additional_claims=None):
     """Create JWT access token"""
@@ -23,7 +92,7 @@ def create_access_token(user_id, additional_claims=None):
     if additional_claims:
         payload.update(additional_claims)
     
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm='HS256')
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 def create_refresh_token(user_id):
     """Create JWT refresh token"""
@@ -34,17 +103,11 @@ def create_refresh_token(user_id):
         'type': 'refresh'
     }
     
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm='HS256')
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 def verify_jwt_token(token):
     """Verify JWT token and return payload"""
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
-        return payload
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
+    return verify_token(token)
 
 def token_required(f):
     """JWT token required decorator"""
@@ -78,9 +141,12 @@ def token_required(f):
         if not user.get('is_active', True):
             return jsonify({'error': 'Account is deactivated'}), 401
         
+        # Serialize user data for JSON compatibility
+        serialized_user = serialize_user(user)
+        
         # Add user to request context
-        request.current_user = user
-        request.current_user_id = str(user['_id'])
+        request.current_user = serialized_user
+        request.current_user_id = serialized_user['_id']
         
         return f(*args, **kwargs)
     return decorated
@@ -103,12 +169,18 @@ def optional_token(f):
             if payload and payload.get('type') == 'access':
                 user = User.get_user_by_id(payload['user_id'])
                 if user and user.get('is_active', True):
-                    request.current_user = user
-                    request.current_user_id = str(user['_id'])
+                    serialized_user = serialize_user(user)
+                    request.current_user = serialized_user
+                    request.current_user_id = serialized_user['_id']
         
         # Add user to request context if available
-        request.current_user = user
-        request.current_user_id = str(user['_id']) if user else None
+        if user:
+            serialized_user = serialize_user(user)
+            request.current_user = serialized_user
+            request.current_user_id = serialized_user['_id']
+        else:
+            request.current_user = None
+            request.current_user_id = None
         
         return f(*args, **kwargs)
     return decorated
@@ -239,17 +311,17 @@ def refresh_access_token(refresh_token):
     # Verify refresh token
     payload = verify_jwt_token(refresh_token)
     if not payload or payload.get('type') != 'refresh':
-        return None, {'error': 'Invalid refresh token'}
+        return None, {'error': {'code': 'INVALID_REFRESH_TOKEN', 'message': 'Invalid refresh token', 'details': {}}}
     
     # Check if refresh token exists in database
     refresh_token_data = RefreshToken.get_refresh_token(refresh_token)
     if not refresh_token_data:
-        return None, {'error': 'Refresh token not found or expired'}
+        return None, {'error': {'code': 'REFRESH_TOKEN_NOT_FOUND', 'message': 'Refresh token not found or expired', 'details': {}}}
     
     # Get user
     user = User.get_user_by_id(payload['user_id'])
     if not user or not user.get('is_active', True):
-        return None, {'error': 'User not found or inactive'}
+        return None, {'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found or inactive', 'details': {}}}
     
     # Create new access token
     new_access_token = create_access_token(str(user['_id']))

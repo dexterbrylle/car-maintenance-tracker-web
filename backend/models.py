@@ -4,22 +4,41 @@ from pymongo import MongoClient
 import os
 import secrets
 import re
-from werkzeug.security import generate_password_hash, check_password_hash
+import bcrypt
+from email_validator import validate_email as email_validate, EmailNotValidError
 
 # MongoDB connection (same as in app.py)
-client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker'))
-db = client.get_default_database()
+MONGODB_URI = os.getenv('MONGODB_URI')
+client = MongoClient(MONGODB_URI)
+
+# Extract database name from URI or use default
+from urllib.parse import urlparse
+parsed_uri = urlparse(MONGODB_URI)
+db_name = parsed_uri.path[1:] if parsed_uri.path else 'maintenance_tracker'
+db = client[db_name]
 
 class Vehicle:
     @staticmethod
+    def _safe_object_id(id_str):
+        """Safely convert string to ObjectId, return None if invalid"""
+        try:
+            return ObjectId(id_str) if id_str else None
+        except Exception:
+            return None
+    
+    @staticmethod
     def create_vehicle(data):
+        user_id = Vehicle._safe_object_id(data.get('user_id'))
+        if not user_id:
+            raise ValueError('Invalid user ID')
+            
         vehicle_data = {
             'make': data.get('make'),
             'model': data.get('model'),
             'year': data.get('year'),
             'current_mileage': data.get('current_mileage', 0),
             'purchase_mileage': data.get('purchase_mileage', 0),
-            'user_id': ObjectId(data.get('user_id')),
+            'user_id': user_id,
             'created_at': datetime.utcnow()
         }
         result = db.vehicles.insert_one(vehicle_data)
@@ -29,24 +48,45 @@ class Vehicle:
     def get_all_vehicles(user_id=None):
         """Get all vehicles for a user or all vehicles (for admin)"""
         if user_id:
-            return list(db.vehicles.find({'user_id': ObjectId(user_id)}))
+            user_object_id = Vehicle._safe_object_id(user_id)
+            if user_object_id:
+                return list(db.vehicles.find({'user_id': user_object_id}))
+            else:
+                # If user_id is not a valid ObjectId, return empty list
+                return []
         return list(db.vehicles.find())
     
     @staticmethod
     def get_vehicle_by_id(vehicle_id, user_id=None):
         """Get vehicle by ID with optional user verification"""
-        query = {'_id': ObjectId(vehicle_id)}
+        vehicle_object_id = Vehicle._safe_object_id(vehicle_id)
+        if not vehicle_object_id:
+            return None
+            
+        query = {'_id': vehicle_object_id}
         if user_id:
-            query['user_id'] = ObjectId(user_id)
+            user_object_id = Vehicle._safe_object_id(user_id)
+            if user_object_id:
+                query['user_id'] = user_object_id
+            else:
+                return None
         return db.vehicles.find_one(query)
     
     @staticmethod
     def update_vehicle(vehicle_id, data, user_id=None):
         """Update vehicle with optional user verification"""
+        vehicle_object_id = Vehicle._safe_object_id(vehicle_id)
+        if not vehicle_object_id:
+            return False
+            
         update_data = {k: v for k, v in data.items() if k in ['make', 'model', 'year', 'current_mileage', 'purchase_mileage']}
-        query = {'_id': ObjectId(vehicle_id)}
+        query = {'_id': vehicle_object_id}
         if user_id:
-            query['user_id'] = ObjectId(user_id)
+            user_object_id = Vehicle._safe_object_id(user_id)
+            if user_object_id:
+                query['user_id'] = user_object_id
+            else:
+                return False
         
         result = db.vehicles.update_one(
             query,
@@ -57,46 +97,80 @@ class Vehicle:
     @staticmethod
     def delete_vehicle(vehicle_id, user_id=None):
         """Delete vehicle with optional user verification"""
-        query = {'_id': ObjectId(vehicle_id)}
+        vehicle_object_id = Vehicle._safe_object_id(vehicle_id)
+        if not vehicle_object_id:
+            return False
+            
+        query = {'_id': vehicle_object_id}
         if user_id:
-            query['user_id'] = ObjectId(user_id)
+            user_object_id = Vehicle._safe_object_id(user_id)
+            if user_object_id:
+                query['user_id'] = user_object_id
+            else:
+                return False
         
         result = db.vehicles.delete_one(query)
         return result.deleted_count > 0
 
 class MaintenanceItem:
     @staticmethod
+    def _safe_object_id(id_str):
+        """Safely convert string to ObjectId, return None if invalid"""
+        try:
+            return ObjectId(id_str) if id_str else None
+        except Exception:
+            return None
+    
+    @staticmethod
     def create_maintenance_item(data):
+        vehicle_id = MaintenanceItem._safe_object_id(data.get('vehicle_id'))
+        if not vehicle_id:
+            raise ValueError('Invalid vehicle ID')
+            
         item_data = {
             'name': data.get('name'),
             'category': data.get('category'),
             'interval_km': data.get('interval_km'),
             'description': data.get('description', ''),
             'action': data.get('action', 'Inspect'),
-            'vehicle_id': ObjectId(data.get('vehicle_id'))
+            'vehicle_id': vehicle_id
         }
         result = db.maintenance_items.insert_one(item_data)
         return str(result.inserted_id)
     
     @staticmethod
     def get_maintenance_items_by_vehicle(vehicle_id):
-        return list(db.maintenance_items.find({'vehicle_id': ObjectId(vehicle_id)}))
+        vehicle_object_id = MaintenanceItem._safe_object_id(vehicle_id)
+        if not vehicle_object_id:
+            return []
+        return list(db.maintenance_items.find({'vehicle_id': vehicle_object_id}))
     
     @staticmethod
     def get_maintenance_item_by_id(item_id):
-        return db.maintenance_items.find_one({'_id': ObjectId(item_id)})
+        item_object_id = MaintenanceItem._safe_object_id(item_id)
+        if not item_object_id:
+            return None
+        return db.maintenance_items.find_one({'_id': item_object_id})
     
     @staticmethod
     def update_maintenance_item(item_id, data):
+        item_object_id = MaintenanceItem._safe_object_id(item_id)
+        if not item_object_id:
+            return False
+            
         update_data = {k: v for k, v in data.items() if k in ['name', 'category', 'interval_km', 'description', 'action']}
         result = db.maintenance_items.update_one(
-            {'_id': ObjectId(item_id)},
+            {'_id': item_object_id},
             {'$set': update_data}
         )
         return result.modified_count > 0
     
     @staticmethod
     def create_default_maintenance_items(vehicle_id):
+        vehicle_object_id = MaintenanceItem._safe_object_id(vehicle_id)
+        if not vehicle_object_id:
+            raise ValueError('Invalid vehicle ID')
+            
         # Import the official Mazda CX-5 2016 schedule
         from data.mazda_cx5_2016_philippines import MAZDA_CX5_2016_PHILIPPINES_SCHEDULE
         
@@ -108,7 +182,7 @@ class MaintenanceItem:
                 'interval_km': item['interval_km'],
                 'description': item['description'],
                 'action': item['action'],
-                'vehicle_id': ObjectId(vehicle_id)
+                'vehicle_id': vehicle_object_id
             })
         
         result = db.maintenance_items.insert_many(default_items)
@@ -128,10 +202,26 @@ class MaintenanceItem:
 
 class ServiceRecord:
     @staticmethod
+    def _safe_object_id(id_str):
+        """Safely convert string to ObjectId, return None if invalid"""
+        try:
+            return ObjectId(id_str) if id_str else None
+        except Exception:
+            return None
+    
+    @staticmethod
     def create_service_record(data):
+        vehicle_id = ServiceRecord._safe_object_id(data.get('vehicle_id'))
+        maintenance_item_id = ServiceRecord._safe_object_id(data.get('maintenance_item_id'))
+        
+        if not vehicle_id:
+            raise ValueError('Invalid vehicle ID')
+        if not maintenance_item_id:
+            raise ValueError('Invalid maintenance item ID')
+            
         service_data = {
-            'vehicle_id': ObjectId(data.get('vehicle_id')),
-            'maintenance_item_id': ObjectId(data.get('maintenance_item_id')),
+            'vehicle_id': vehicle_id,
+            'maintenance_item_id': maintenance_item_id,
             'date': data.get('date'),
             'mileage': data.get('mileage'),
             'cost': data.get('cost', 0),
@@ -143,24 +233,37 @@ class ServiceRecord:
     
     @staticmethod
     def get_service_records_by_vehicle(vehicle_id):
-        return list(db.service_records.find({'vehicle_id': ObjectId(vehicle_id)}))
+        vehicle_object_id = ServiceRecord._safe_object_id(vehicle_id)
+        if not vehicle_object_id:
+            return []
+        return list(db.service_records.find({'vehicle_id': vehicle_object_id}))
     
     @staticmethod
     def get_service_record_by_id(service_id):
-        return db.service_records.find_one({'_id': ObjectId(service_id)})
+        service_object_id = ServiceRecord._safe_object_id(service_id)
+        if not service_object_id:
+            return None
+        return db.service_records.find_one({'_id': service_object_id})
     
     @staticmethod
     def update_service_record(service_id, data):
+        service_object_id = ServiceRecord._safe_object_id(service_id)
+        if not service_object_id:
+            return False
+            
         update_data = {k: v for k, v in data.items() if k in ['date', 'mileage', 'cost', 'notes', 'maintenance_item_id']}
         result = db.service_records.update_one(
-            {'_id': ObjectId(service_id)},
+            {'_id': service_object_id},
             {'$set': update_data}
         )
         return result.modified_count > 0
     
     @staticmethod
     def delete_service_record(service_id):
-        result = db.service_records.delete_one({'_id': ObjectId(service_id)})
+        service_object_id = ServiceRecord._safe_object_id(service_id)
+        if not service_object_id:
+            return False
+        result = db.service_records.delete_one({'_id': service_object_id})
         return result.deleted_count > 0
 
 class FillUp:
@@ -317,15 +420,25 @@ class FillUp:
 
 class User:
     @staticmethod
+    def hash_password(password):
+        """Hash password using bcrypt with rounds=12"""
+        if not User.validate_password(password):
+            raise ValueError('Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character')
+        
+        salt = bcrypt.gensalt(rounds=12)
+        return bcrypt.hashpw(password.encode('utf-8'), salt)
+    
+    @staticmethod
+    def verify_password(password, password_hash):
+        """Verify password against bcrypt hash"""
+        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    
+    @staticmethod
     def create_user(data):
-        """Create a new user with hashed password and default subscription"""
+        """Create a new user with bcrypt password hashing and proper schema"""
         # Validate email format
         if not User.validate_email(data.get('email', '')):
             raise ValueError('Invalid email format')
-        
-        # Validate password strength
-        if not User.validate_password(data.get('password', '')):
-            raise ValueError('Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character')
         
         # Check if user already exists
         existing_user = db.users.find_one({'email': data.get('email')})
@@ -334,11 +447,11 @@ class User:
         
         user_data = {
             'email': data.get('email').lower().strip(),
-            'password_hash': generate_password_hash(data.get('password')),
+            'password_hash': User.hash_password(data.get('password')).decode('utf-8'),
             'first_name': data.get('first_name', '').strip(),
             'last_name': data.get('last_name', '').strip(),
-            'subscription_tier': 'free',  # free, premium, enterprise
-            'subscription_expires': None,
+            'phone': data.get('phone', '').strip(),
+            'subscription_tier': data.get('subscription_tier', 'free'),  # free, personal, family, business
             'is_verified': False,
             'is_active': True,
             'verification_token': secrets.token_urlsafe(32),
@@ -378,8 +491,8 @@ class User:
         if not user.get('is_active', True):
             return None
         
-        # Verify password
-        if check_password_hash(user['password_hash'], password):
+        # Verify password using bcrypt
+        if User.verify_password(password, user['password_hash']):
             # Reset login attempts on successful login
             db.users.update_one(
                 {'_id': user['_id']},
@@ -495,7 +608,7 @@ class User:
         result = db.users.update_one(
             {'_id': ObjectId(user_id)},
             {'$set': {
-                'password_hash': generate_password_hash(new_password),
+                'password_hash': User.hash_password(new_password).decode('utf-8'),
                 'password_reset_token': None,
                 'password_reset_expires': None,
                 'login_attempts': 0,
@@ -524,9 +637,12 @@ class User:
     
     @staticmethod
     def validate_email(email):
-        """Validate email format"""
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        return re.match(pattern, email) is not None
+        """Validate email format using email-validator"""
+        try:
+            email_validate(email, check_deliverability=False)
+            return True
+        except EmailNotValidError:
+            return False
     
     @staticmethod
     def validate_password(password):
@@ -619,3 +735,71 @@ class RefreshToken:
             ]
         })
         return result.deleted_count
+
+def setup_mongodb_indexes():
+    """Create MongoDB indexes for performance optimization with user isolation support"""
+    # Users collection indexes
+    db.users.create_index([('email', 1)], unique=True, sparse=True)
+    db.users.create_index([('subscription_tier', 1)])
+    db.users.create_index([('is_active', 1), ('subscription_tier', 1)])
+    db.users.create_index([('created_at', -1)])
+    db.users.create_index([('last_login', -1)])
+    
+    # Vehicles collection indexes - user isolation support
+    db.vehicles.create_index([('user_id', 1), ('created_at', -1)])
+    db.vehicles.create_index([('user_id', 1), ('make', 1), ('model', 1), ('year', 1)])
+    db.vehicles.create_index([('make', 1), ('model', 1), ('year', 1)])
+    
+    # Maintenance items collection indexes - user isolation support
+    db.maintenance_items.create_index([('vehicle_id', 1), ('category', 1)])
+    db.maintenance_items.create_index([('interval_km', 1)])
+    # Compound index for user isolation via vehicle ownership
+    db.maintenance_items.create_index([
+        ('vehicle_id', 1), 
+        ('interval_km', 1), 
+        ('category', 1)
+    ])
+    
+    # Service records collection indexes - user isolation support
+    db.service_records.create_index([('vehicle_id', 1), ('date', -1)])
+    db.service_records.create_index([('maintenance_item_id', 1)])
+    # Compound index for user isolation via vehicle ownership
+    db.service_records.create_index([
+        ('vehicle_id', 1), 
+        ('date', -1), 
+        ('maintenance_item_id', 1)
+    ])
+    # Index for date-based queries
+    db.service_records.create_index([('date', -1)])
+    
+    # Fill-ups collection indexes - user isolation support
+    db.fill_ups.create_index([('vehicle_id', 1), ('date', -1)])
+    db.fill_ups.create_index([('full_tank', 1), ('vehicle_id', 1)])
+    # Compound index for fuel calculations
+    db.fill_ups.create_index([
+        ('vehicle_id', 1), 
+        ('full_tank', 1), 
+        ('odometer_km', -1)
+    ])
+    # Index for odometer progression validation
+    db.fill_ups.create_index([('vehicle_id', 1), ('odometer_km', 1)])
+    # Index for date-based queries
+    db.fill_ups.create_index([('date', -1)])
+    
+    # Refresh tokens collection indexes
+    db.refresh_tokens.create_index([('token', 1)], unique=True)
+    db.refresh_tokens.create_index([('user_id', 1), ('expires', 1)])
+    db.refresh_tokens.create_index([('expires', 1)], expireAfterSeconds=0)  # TTL index
+    db.refresh_tokens.create_index([('user_id', 1), ('is_revoked', 1)])
+    
+    print("MongoDB indexes created successfully")
+
+# Run index setup only when explicitly called after app initialization
+def ensure_mongodb_indexes():
+    """Ensure MongoDB indexes are created (call this after app initialization)"""
+    try:
+        setup_mongodb_indexes()
+    except Exception as e:
+        print(f"Error creating MongoDB indexes: {e}")
+
+# Don't run automatically on import - this prevents issues during development

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { AuthContextType, User, AuthTokens, AuthError, LoginCredentials, RegisterData, UpdatePasswordData, ForgotPasswordData, ResetPasswordData, SubscriptionTier, SubscriptionStatusInfo } from '@/types/auth';
+import { AuthContextType, User, AuthTokens, LoginCredentials, RegisterData, UpdatePasswordData, ForgotPasswordData, ResetPasswordData, SubscriptionTier, SubscriptionStatusInfo } from '@/types/auth';
 import { api } from '@/lib/api';
 
 interface AuthProviderProps {
@@ -115,8 +115,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Token refresh function
   const refreshToken = useCallback(async (): Promise<boolean> => {
-    const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-    if (!refreshToken) {
+    const storedRefreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+    if (!storedRefreshToken) {
       return false;
     }
 
@@ -126,22 +126,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        body: JSON.stringify({ refresh_token: storedRefreshToken }),
       });
 
       if (response.ok) {
         const data = await response.json();
         const newTokens: AuthTokens = {
           access_token: data.access_token,
-          refresh_token: data.refresh_token || refreshToken,
-          expires_in: data.expires_in,
+          refresh_token: data.refresh_token || storedRefreshToken,
+          expires_in: data.expires_in || 3600,
           token_type: data.token_type || 'Bearer',
         };
         
         storeTokens(newTokens);
         return true;
       } else {
-        // Refresh token is invalid or expired
+        // Refresh token is invalid or expired - try to parse error response
+        try {
+          const errorData = await response.json();
+          console.error('Token refresh failed:', errorData.message || 'Unknown error');
+        } catch (e) {
+          console.error('Token refresh failed: Unable to parse error response');
+        }
         return false;
       }
     } catch (error) {
@@ -158,10 +164,61 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await api.auth.login(credentials);
       
       if (response.success && response.data) {
-        const { user, tokens } = response.data;
+        // Backend returns: {message, user, tokens}
+        const user = response.data.user;
+        const tokens = response.data.tokens;
+        
+        if (!user || !tokens) {
+          throw new Error('Invalid response format from server');
+        }
+        
+        // Transform user data to match expected User interface
+        const transformedUser: User = {
+          _id: user.id,
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          full_name: `${user.first_name} ${user.last_name}`,
+          is_verified: user.is_verified,
+          is_active: true,
+          subscription_tier: user.subscription_tier || 'free',
+          subscription_status: 'active',
+          last_login_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          preferences: user.preferences || {
+            notifications: {
+              email: true,
+              push: true,
+              maintenance_reminders: true,
+              fuel_alerts: true,
+              subscription_reminders: true,
+            },
+            currency: 'USD',
+            distance_unit: 'km',
+            fuel_unit: 'L',
+            timezone: 'UTC',
+            language: 'en',
+          },
+          limits: {
+            max_vehicles: 5,
+            max_records_per_vehicle: 1000,
+            max_export_records: 5000,
+            max_storage_mb: 100,
+            features: {
+              advanced_analytics: false,
+              custom_maintenance_schedules: false,
+              multi_vehicle_management: true,
+              fuel_performance_insights: true,
+              export_customization: false,
+              api_access: false,
+              priority_support: false,
+            },
+          },
+        };
         
         storeTokens(tokens);
-        storeUserData(user);
+        storeUserData(transformedUser);
         setIsAuthenticated(true);
         
         // Fetch subscription info
@@ -185,10 +242,61 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await api.auth.register(data);
       
       if (response.success && response.data) {
-        const { user, tokens } = response.data;
+        // Backend returns: {message, user, tokens}
+        const user = response.data.user;
+        const tokens = response.data.tokens;
+        
+        if (!user || !tokens) {
+          throw new Error('Invalid response format from server');
+        }
+        
+        // Transform user data to match expected User interface
+        const transformedUser: User = {
+          _id: user.id,
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          full_name: `${user.first_name} ${user.last_name}`,
+          is_verified: user.is_verified,
+          is_active: true,
+          subscription_tier: user.subscription_tier || 'free',
+          subscription_status: 'active',
+          last_login_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          preferences: user.preferences || {
+            notifications: {
+              email: true,
+              push: true,
+              maintenance_reminders: true,
+              fuel_alerts: true,
+              subscription_reminders: true,
+            },
+            currency: 'USD',
+            distance_unit: 'km',
+            fuel_unit: 'L',
+            timezone: 'UTC',
+            language: 'en',
+          },
+          limits: {
+            max_vehicles: 5,
+            max_records_per_vehicle: 1000,
+            max_export_records: 5000,
+            max_storage_mb: 100,
+            features: {
+              advanced_analytics: false,
+              custom_maintenance_schedules: false,
+              multi_vehicle_management: true,
+              fuel_performance_insights: true,
+              export_customization: false,
+              api_access: false,
+              priority_support: false,
+            },
+          },
+        };
         
         storeTokens(tokens);
-        storeUserData(user);
+        storeUserData(transformedUser);
         setIsAuthenticated(true);
         
         // Fetch subscription info
@@ -238,7 +346,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('Profile update error:', error);
-      throw error;
+      
+      // Transform error to user-friendly message
+      if (error instanceof Error) {
+        const errorMessage = error.message;
+        if (errorMessage.includes('Unable to update your profile')) {
+          throw new Error('Unable to update your profile. Please try again later.');
+        } else if (errorMessage.includes('User not found')) {
+          throw new Error('User account not found. Please log in again.');
+        } else if (errorMessage.includes('Profile update failed')) {
+          throw new Error('Failed to update profile. Please check your information and try again.');
+        }
+        throw error;
+      }
+      throw new Error('An unexpected error occurred while updating your profile.');
     }
   }, [user, storeUserData]);
 
@@ -252,7 +373,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('Password change error:', error);
-      throw error;
+      
+      // Transform error to user-friendly message
+      if (error instanceof Error) {
+        const errorMessage = error.message;
+        if (errorMessage.includes('Current password is incorrect')) {
+          throw new Error('Current password is incorrect. Please try again.');
+        } else if (errorMessage.includes('Unable to change password')) {
+          throw new Error('Unable to change password. Please try again later.');
+        } else if (errorMessage.includes('Password change failed')) {
+          throw new Error('Failed to change password. Please ensure your new password meets the requirements.');
+        } else if (errorMessage.includes('VALIDATION_ERROR')) {
+          throw new Error('Password validation failed. Please ensure your password meets all requirements.');
+        }
+        throw error;
+      }
+      throw new Error('An unexpected error occurred while changing your password.');
     }
   }, []);
 
@@ -266,7 +402,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('Forgot password error:', error);
-      throw error;
+      
+      // Transform error to user-friendly message
+      if (error instanceof Error) {
+        const errorMessage = error.message;
+        if (errorMessage.includes('Unable to process your password reset request')) {
+          throw new Error('Unable to process your password reset request. Please try again later.');
+        } else if (errorMessage.includes('Password reset request failed')) {
+          throw new Error('Failed to send password reset email. Please check your email address and try again.');
+        } else if (errorMessage.includes('Please enter a valid email address')) {
+          throw new Error('Please enter a valid email address.');
+        }
+        throw error;
+      }
+      throw new Error('An unexpected error occurred while requesting password reset.');
     }
   }, []);
 
@@ -278,8 +427,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (response.success && response.data) {
         const { user, tokens } = response.data;
         
+        // Transform user data to match expected User interface
+        const transformedUser: User = {
+          _id: user.id,
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          full_name: `${user.first_name} ${user.last_name}`,
+          is_verified: user.is_verified,
+          is_active: true,
+          subscription_tier: user.subscription_tier || 'free',
+          subscription_status: 'active',
+          last_login_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          preferences: user.preferences || {
+            notifications: {
+              email: true,
+              push: true,
+              maintenance_reminders: true,
+              fuel_alerts: true,
+              subscription_reminders: true,
+            },
+            currency: 'USD',
+            distance_unit: 'km',
+            fuel_unit: 'L',
+            timezone: 'UTC',
+            language: 'en',
+          },
+          limits: {
+            max_vehicles: 5,
+            max_records_per_vehicle: 1000,
+            max_export_records: 5000,
+            max_storage_mb: 100,
+            features: {
+              advanced_analytics: false,
+              custom_maintenance_schedules: false,
+              multi_vehicle_management: true,
+              fuel_performance_insights: true,
+              export_customization: false,
+              api_access: false,
+              priority_support: false,
+            },
+          },
+        };
+        
         storeTokens(tokens);
-        storeUserData(user);
+        storeUserData(transformedUser);
         setIsAuthenticated(true);
         
         // Fetch subscription info
@@ -289,7 +483,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('Reset password error:', error);
-      throw error;
+      
+      // Transform error to user-friendly message
+      if (error instanceof Error) {
+        const errorMessage = error.message;
+        if (errorMessage.includes('Invalid or expired reset token')) {
+          throw new Error('Invalid or expired reset token. Please request a new password reset email.');
+        } else if (errorMessage.includes('Reset token has expired')) {
+          throw new Error('Reset token has expired. Please request a new password reset email.');
+        } else if (errorMessage.includes('Unable to reset your password')) {
+          throw new Error('Unable to reset your password. Please try again later.');
+        } else if (errorMessage.includes('Password reset failed')) {
+          throw new Error('Failed to reset password. Please ensure your new password meets the requirements.');
+        }
+        throw error;
+      }
+      throw new Error('An unexpected error occurred while resetting your password.');
     }
   }, [storeTokens, storeUserData]);
 
@@ -413,7 +622,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    let inactivityTimer: NodeJS.Timeout;
+    let inactivityTimer: ReturnType<typeof setTimeout>;
     
     const resetInactivityTimer = () => {
       clearTimeout(inactivityTimer);
@@ -474,7 +683,7 @@ export const useAuth = (): AuthContextType => {
 export const useSubscription = () => {
   const { subscription, user } = useAuth();
   
-  const hasFeature = (feature: keyof typeof subscription?.usage) => {
+  const hasFeature = (feature: string) => {
     if (!subscription || !user) return false;
     
     const limits = user.limits;

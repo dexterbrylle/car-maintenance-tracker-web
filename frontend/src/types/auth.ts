@@ -19,7 +19,6 @@ export interface User {
 }
 
 export interface UserPreferences {
-  theme: 'light' | 'dark' | 'system';
   notifications: {
     email: boolean;
     push: boolean;

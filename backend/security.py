@@ -1,5 +1,7 @@
 import re
 import html
+import secrets
+import bcrypt
 from functools import wraps
 from flask import request, jsonify
 from email_validator import validate_email as email_validate, EmailNotValidError
@@ -13,27 +15,143 @@ def validate_email(email):
     except EmailNotValidError:
         return False
 
-def validate_password(password):
-    """Validate password strength"""
-    if len(password) < 8:
-        return False, "Password must be at least 8 characters long"
+# Password validation utilities
+def validate_password_strength(password):
+    """Validate password strength with comprehensive requirements"""
+    errors = []
     
-    # Check for uppercase, lowercase, number, and special character
+    # Length validation
+    if len(password) < 8:
+        errors.append("Password must be at least 8 characters long")
+    elif len(password) > 128:
+        errors.append("Password must be less than 128 characters long")
+    
+    # Character complexity validation
     has_upper = any(c.isupper() for c in password)
     has_lower = any(c.islower() for c in password)
     has_number = any(c.isdigit() for c in password)
     has_special = any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in password)
     
     if not has_upper:
-        return False, "Password must contain at least one uppercase letter"
+        errors.append("Password must contain at least one uppercase letter")
     if not has_lower:
-        return False, "Password must contain at least one lowercase letter"
+        errors.append("Password must contain at least one lowercase letter")
     if not has_number:
-        return False, "Password must contain at least one number"
+        errors.append("Password must contain at least one number")
     if not has_special:
-        return False, "Password must contain at least one special character"
+        errors.append("Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)")
     
-    return True, "Password is valid"
+    # Common password patterns to avoid
+    common_patterns = [
+        r'123456', r'password', r'qwerty', r'abc123',
+        r'letmein', r'admin', r'welcome', r'football'
+    ]
+    
+    for pattern in common_patterns:
+        if pattern.lower() in password.lower():
+            errors.append(f"Password contains a common pattern that is not secure")
+            break
+    
+    # Sequential characters
+    if re.search(r'(?:abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz|012|123|234|345|456|567|678|789)', password.lower()):
+        errors.append("Password contains sequential characters")
+    
+    # Repeated characters
+    if re.search(r'(.)\1{2,}', password):
+        errors.append("Password contains repeated characters")
+    
+    return len(errors) == 0, errors
+
+def check_password_breach(password):
+    """Check if password has been in a known data breach (placeholder)"""
+    # In a production environment, you would integrate with services like:
+    # - Have I Been Pwned API
+    # - Troy Hunt's Pwned Passwords API
+    # For now, this is a placeholder that returns False
+    return False
+
+def generate_secure_password(length=12):
+    """Generate a secure random password"""
+    if length < 8:
+        length = 8
+    
+    # Character sets
+    lowercase = 'abcdefghijklmnopqrstuvwxyz'
+    uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    numbers = '0123456789'
+    special = '!@#$%^&*()_+-=[]{}|;:,.<>?'
+    
+    # Ensure at least one character from each set
+    password = [
+        secrets.choice(lowercase),
+        secrets.choice(uppercase),
+        secrets.choice(numbers),
+        secrets.choice(special)
+    ]
+    
+    # Fill remaining length with random characters from all sets
+    all_chars = lowercase + uppercase + numbers + special
+    for _ in range(length - 4):
+        password.append(secrets.choice(all_chars))
+    
+    # Shuffle the password characters
+    secrets.SystemRandom().shuffle(password)
+    
+    return ''.join(password)
+
+def validate_password(password):
+    """Validate password strength and return standardized response"""
+    is_valid, errors = validate_password_strength(password)
+    
+    # Check for common breaches
+    if is_valid and check_password_breach(password):
+        errors.append("This password has been found in known data breaches")
+        is_valid = False
+    
+    return is_valid, errors
+
+# Input validation for user data
+def validate_user_data(data):
+    """Validate user registration data"""
+    errors = []
+    
+    # Validate required fields
+    required_fields = ['email', 'password', 'first_name', 'last_name']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            errors.append(f'{field} is required')
+    
+    # Validate email
+    if 'email' in data and data['email']:
+        if not validate_email(data['email']):
+            errors.append('Invalid email format')
+    
+    # Validate password
+    if 'password' in data and data['password']:
+        is_valid, password_errors = validate_password(data['password'])
+        if not is_valid:
+            errors.extend(password_errors)
+    
+    # Validate names
+    if 'first_name' in data and data['first_name']:
+        if len(data['first_name'].strip()) < 2:
+            errors.append('First name must be at least 2 characters long')
+        elif len(data['first_name'].strip()) > 50:
+            errors.append('First name must be less than 50 characters long')
+    
+    if 'last_name' in data and data['last_name']:
+        if len(data['last_name'].strip()) < 2:
+            errors.append('Last name must be at least 2 characters long')
+        elif len(data['last_name'].strip()) > 50:
+            errors.append('Last name must be less than 50 characters long')
+    
+    # Validate phone
+    if 'phone' in data and data['phone']:
+        phone = data['phone'].strip()
+        if phone and not re.match(r'^\+?[\d\s\-\(\)]{10,20}$', phone):
+            errors.append('Invalid phone number format')
+    
+    return errors
 
 def validate_vehicle_data(data):
     """Validate vehicle data"""
@@ -360,3 +478,164 @@ def log_security_event(event_type, user_id=None, ip_address=None, details=None):
     }
     
     logger.warning(f"Security Event: {log_data}")
+
+# Rate limiting and security decorators
+def rate_limit_by_ip(max_requests=100, time_window=60):
+    """Simple IP-based rate limiting decorator"""
+    from datetime import datetime, timedelta
+    import time
+    
+    # Simple in-memory rate limiting (for production, use Redis)
+    ip_requests = {}
+    
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            ip = request.remote_addr
+            current_time = time.time()
+            
+            # Clean old requests
+            if ip in ip_requests:
+                ip_requests[ip] = [req_time for req_time in ip_requests[ip] 
+                                if current_time - req_time < time_window]
+            else:
+                ip_requests[ip] = []
+            
+            # Check rate limit
+            if len(ip_requests[ip]) >= max_requests:
+                return jsonify({
+                    'error': 'Rate limit exceeded',
+                    'message': f'Maximum {max_requests} requests per {time_window} seconds'
+                }), 429
+            
+            # Add current request
+            ip_requests[ip].append(current_time)
+            
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
+def validate_json_content_type(f):
+    """Validate that request has JSON content type"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type must be application/json'}), 400
+        return f(*args, **kwargs)
+    return decorated
+
+def validate_content_length(max_length=1024*1024):  # 1MB default
+    """Validate request content length"""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            content_length = request.content_length
+            if content_length and content_length > max_length:
+                return jsonify({
+                    'error': 'Request entity too large',
+                    'max_length': max_length
+                }), 413
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
+# Token security utilities
+def extract_token_from_request():
+    """Extract JWT token from request"""
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        return auth_header.split(' ')[1]
+    return None
+
+def validate_token_format(token):
+    """Validate JWT token format"""
+    if not token or not isinstance(token, str):
+        return False
+    
+    # Basic JWT format validation (header.payload.signature)
+    parts = token.split('.')
+    if len(parts) != 3:
+        return False
+    
+    # Check if parts are base64url encoded
+    import base64
+    try:
+        for part in parts[:-1]:  # Skip signature
+            # Add padding if needed
+            padding = len(part) % 4
+            if padding:
+                part += '=' * (4 - padding)
+            base64.urlsafe_b64decode(part)
+    except:
+        return False
+    
+    return True
+
+# Input sanitization utilities
+def sanitize_string_input(input_string, max_length=None):
+    """Sanitize string input"""
+    if not input_string:
+        return ""
+    
+    # Convert to string if not already
+    if not isinstance(input_string, str):
+        input_string = str(input_string)
+    
+    # Strip whitespace
+    sanitized = input_string.strip()
+    
+    # Limit length if specified
+    if max_length and len(sanitized) > max_length:
+        sanitized = sanitized[:max_length]
+    
+    # Basic HTML escaping
+    sanitized = html.escape(sanitized)
+    
+    return sanitized
+
+def sanitize_email(email):
+    """Sanitize email address"""
+    if not email:
+        return ""
+    
+    email = str(email).lower().strip()
+    
+    # Basic email format validation
+    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        return ""
+    
+    return email
+
+# Security configuration utilities
+def get_security_headers():
+    """Get comprehensive security headers"""
+    return {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
+        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+        'X-Permitted-Cross-Domain-Policies': 'none',
+        'Server': 'Car Maintenance Tracker'
+    }
+
+def get_csp_headers():
+    """Get Content Security Policy headers"""
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "base-uri 'self'; "
+        "require-trusted-types-for 'script';"
+    )
+    
+    return {
+        'Content-Security-Policy': csp,
+        'X-Content-Security-Policy': csp
+    }

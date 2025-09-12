@@ -152,18 +152,62 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
     } catch (error: any) {
       console.error('Registration error:', error);
       
-      // Handle different error types
-      if (error.response?.data?.errors) {
-        // Form validation errors
-        setErrors(error.response.data.errors);
+      // Handle different error types with user-friendly messages
+      if (error.response?.data?.details) {
+        // Form validation errors from backend
+        const backendErrors = error.response.data.details;
+        const formattedErrors: Record<string, string> = {};
+        
+        Object.keys(backendErrors).forEach(key => {
+          const errorMessages = backendErrors[key];
+          if (Array.isArray(errorMessages)) {
+            formattedErrors[key] = errorMessages[0];
+          } else if (typeof errorMessages === 'string') {
+            formattedErrors[key] = errorMessages;
+          }
+        });
+        
+        setErrors(formattedErrors);
+        
+        // If there's a general error message, show it as submit error
+        if (error.response.data.message) {
+          setSubmitError(error.response.data.message);
+        }
       } else if (error.response?.data?.message) {
-        // API error message
-        setSubmitError(error.response.data.message);
+        // API error message - make it user-friendly
+        const apiMessage = error.response.data.message;
+        let userFriendlyMessage = apiMessage;
+        
+        // Transform technical messages to user-friendly ones
+        if (apiMessage.includes('User already exists')) {
+          userFriendlyMessage = 'An account with this email already exists. Please try logging in or use a different email.';
+        } else if (apiMessage.includes('Please provide')) {
+          userFriendlyMessage = 'Please fill in all required fields.';
+        } else if (apiMessage.includes('Please enter a valid email address')) {
+          userFriendlyMessage = 'Please enter a valid email address.';
+        } else if (apiMessage.includes('Unable to create your account')) {
+          userFriendlyMessage = 'Unable to create your account. Please try again later.';
+        } else if (apiMessage.includes('Invalid response format from server')) {
+          userFriendlyMessage = 'Server response error. Please try again later.';
+        }
+        
+        setSubmitError(userFriendlyMessage);
       } else if (error.message) {
         // Network or other error
-        setSubmitError(error.message);
+        let networkErrorMessage = error.message;
+        
+        // Transform network errors to user-friendly messages
+        if (error.message.includes('Network Error')) {
+          networkErrorMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (error.message.includes('timeout')) {
+          networkErrorMessage = 'Request timeout. Please try again.';
+        } else if (error.message.includes('Invalid response format from server')) {
+          networkErrorMessage = 'Server response error. Please try again later.';
+        }
+        
+        setSubmitError(networkErrorMessage);
       } else {
-        setSubmitError('An unexpected error occurred. Please try again.');
+        setSubmitError('An unexpected error occurred during registration. Please try again later.');
       }
     }
   };
@@ -425,10 +469,10 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                   id="newsletter_opt_in"
                   name="newsletter_opt_in"
                   checked={formData.newsletter_opt_in}
-                  onCheckedChange={(checked) => {
+                  onChange={(e) => {
                     setFormData(prev => ({
                       ...prev,
-                      newsletter_opt_in: checked as boolean,
+                      newsletter_opt_in: e.target.checked as boolean,
                     }));
                   }}
                   disabled={isLoading}
@@ -444,10 +488,10 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                   id="accept_terms"
                   name="accept_terms"
                   checked={formData.accept_terms}
-                  onCheckedChange={(checked) => {
+                  onChange={(e) => {
                     setFormData(prev => ({
                       ...prev,
-                      accept_terms: checked as boolean,
+                      accept_terms: e.target.checked as boolean,
                     }));
                   }}
                   disabled={isLoading}

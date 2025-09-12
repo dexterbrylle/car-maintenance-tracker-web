@@ -12,11 +12,23 @@ bp = Blueprint('vehicles', __name__)
 
 def serialize_vehicle(vehicle):
     """Convert MongoDB vehicle document to JSON-serializable format"""
-    if vehicle:
-        vehicle['_id'] = str(vehicle['_id'])
-        if 'created_at' in vehicle and isinstance(vehicle['created_at'], datetime):
-            vehicle['created_at'] = vehicle['created_at'].isoformat()
-    return vehicle
+    if not vehicle:
+        return vehicle
+    
+    # Create a copy to avoid modifying the original MongoDB document
+    serialized = vehicle.copy()
+    
+    # Convert ObjectId fields to strings
+    if '_id' in serialized:
+        serialized['_id'] = str(serialized['_id'])
+    if 'user_id' in serialized:
+        serialized['user_id'] = str(serialized['user_id'])
+    
+    # Convert datetime fields to ISO format
+    if 'created_at' in serialized and isinstance(serialized['created_at'], datetime):
+        serialized['created_at'] = serialized['created_at'].isoformat()
+    
+    return serialized
 
 @bp.route('', methods=['GET'])
 @token_required
@@ -24,13 +36,20 @@ def serialize_vehicle(vehicle):
 def get_vehicles():
     try:
         user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'User ID not found'}), 401
+            
         vehicles = Vehicle.get_all_vehicles(user_id)
         
         # Serialize each vehicle to handle ObjectId and datetime
         serialized_vehicles = [serialize_vehicle(vehicle) for vehicle in vehicles]
         return jsonify(serialized_vehicles), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Handle ObjectId serialization in error messages
+        error_msg = str(e)
+        if 'ObjectId' in error_msg:
+            error_msg = 'Database serialization error occurred'
+        return jsonify({'error': error_msg}), 500
 
 @bp.route('', methods=['POST'])
 @token_required
@@ -38,10 +57,14 @@ def get_vehicles():
 @check_subscription_limits('vehicles')
 def add_vehicle():
     try:
+        user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'User ID not found'}), 401
+            
         data = request.get_json()
         
         # Add user_id to data
-        data['user_id'] = get_current_user_id()
+        data['user_id'] = user_id
         
         # Validate input
         validation = validation_result(validate_vehicle_data(data))
@@ -58,7 +81,11 @@ def add_vehicle():
         return jsonify({'id': vehicle_id, 'message': 'Vehicle created successfully'}), 201
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Handle ObjectId serialization in error messages
+        error_msg = str(e)
+        if 'ObjectId' in error_msg:
+            error_msg = 'Database serialization error occurred'
+        return jsonify({'error': error_msg}), 500
 
 @bp.route('/<vehicle_id>', methods=['PUT'])
 @token_required
@@ -66,6 +93,9 @@ def add_vehicle():
 def update_vehicle(vehicle_id):
     try:
         user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'User ID not found'}), 401
+            
         data = request.get_json()
         
         # Validate input
@@ -79,7 +109,11 @@ def update_vehicle(vehicle_id):
             return jsonify({'error': 'Vehicle not found'}), 404
             
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Handle ObjectId serialization in error messages
+        error_msg = str(e)
+        if 'ObjectId' in error_msg:
+            error_msg = 'Database serialization error occurred'
+        return jsonify({'error': error_msg}), 500
 
 @bp.route('/<vehicle_id>', methods=['DELETE'])
 @token_required
@@ -87,14 +121,20 @@ def update_vehicle(vehicle_id):
 def delete_vehicle(vehicle_id):
     try:
         user_id = get_current_user_id()
-        
+        if not user_id:
+            return jsonify({'error': 'User ID not found'}), 401
+            
         if Vehicle.delete_vehicle(vehicle_id, user_id):
             return jsonify({'message': 'Vehicle deleted successfully'}), 200
         else:
             return jsonify({'error': 'Vehicle not found'}), 404
             
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Handle ObjectId serialization in error messages
+        error_msg = str(e)
+        if 'ObjectId' in error_msg:
+            error_msg = 'Database serialization error occurred'
+        return jsonify({'error': error_msg}), 500
 
 @bp.route('/<vehicle_id>/create-maintenance-items', methods=['POST'])
 @token_required
@@ -102,7 +142,9 @@ def delete_vehicle(vehicle_id):
 def create_maintenance_items(vehicle_id):
     try:
         user_id = get_current_user_id()
-        
+        if not user_id:
+            return jsonify({'error': 'User ID not found'}), 401
+            
         # Verify vehicle belongs to user
         vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
@@ -111,7 +153,11 @@ def create_maintenance_items(vehicle_id):
         MaintenanceItem.create_default_maintenance_items(vehicle_id)
         return jsonify({'message': 'Maintenance items created successfully'}), 201
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Handle ObjectId serialization in error messages
+        error_msg = str(e)
+        if 'ObjectId' in error_msg:
+            error_msg = 'Database serialization error occurred'
+        return jsonify({'error': error_msg}), 500
 
 @bp.route('/<vehicle_id>/mileage', methods=['PATCH'])
 @token_required
@@ -119,6 +165,9 @@ def create_maintenance_items(vehicle_id):
 def update_mileage(vehicle_id):
     try:
         user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'User ID not found'}), 401
+            
         data = request.get_json()
         
         if 'current_mileage' not in data:
@@ -146,7 +195,11 @@ def update_mileage(vehicle_id):
             return jsonify({'error': 'Vehicle not found'}), 404
             
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Handle ObjectId serialization in error messages
+        error_msg = str(e)
+        if 'ObjectId' in error_msg:
+            error_msg = 'Database serialization error occurred'
+        return jsonify({'error': error_msg}), 500
 
 @bp.route('/export/<vehicle_id>', methods=['GET'])
 @token_required
@@ -155,6 +208,8 @@ def export_vehicle_info(vehicle_id):
     """Export vehicle information to CSV format"""
     try:
         user_id = get_current_user_id()
+        if not user_id:
+            return jsonify({'error': 'User ID not found'}), 401
         
         # Get vehicle info
         vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
@@ -248,4 +303,8 @@ def export_vehicle_info(vehicle_id):
         return response
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Handle ObjectId serialization in error messages
+        error_msg = str(e)
+        if 'ObjectId' in error_msg:
+            error_msg = 'Database serialization error occurred'
+        return jsonify({'error': error_msg}), 500

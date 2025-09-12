@@ -4,6 +4,9 @@ from bson.objectid import ObjectId
 from datetime import datetime
 from utils.insights import generate_insights, predict_maintenance_needs, get_fuel_performance_summary
 from utils.fuel_calculations import get_fuel_performance_trends, calculate_monthly_fuel_cost
+from auth import token_required, get_current_user_id
+from security import validate_json_request, sanitize_request_data
+from rate_limiter import user_rate_limit
 
 bp = Blueprint('dashboard', __name__)
 
@@ -75,10 +78,14 @@ def get_fuel_performance(vehicle_id):
         return None
 
 @bp.route('/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_dashboard(vehicle_id):
     try:
-        # Get vehicle information
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        user_id = get_current_user_id()
+        
+        # Get vehicle information and verify ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         
@@ -178,11 +185,15 @@ def get_dashboard(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<vehicle_id>/insights', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_insights(vehicle_id):
     """Get fuel-maintenance correlation insights for a vehicle"""
     try:
-        # Get vehicle information
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        user_id = get_current_user_id()
+        
+        # Get vehicle information and verify ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         

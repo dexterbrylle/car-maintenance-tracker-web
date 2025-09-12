@@ -232,7 +232,7 @@ def update_vehicle_fuel_stats(vehicle_id):
             return
         
         # Update vehicle document with fuel stats
-        client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker'))
+        client = MongoClient(os.getenv('MONGODB_URI'))
         db = client.get_default_database()
         
         db.vehicles.update_one(

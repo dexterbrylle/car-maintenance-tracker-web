@@ -440,10 +440,10 @@ export const MobileRegister: React.FC<MobileRegisterProps> = ({ onSuccess }) => 
                       id="newsletter_opt_in"
                       name="newsletter_opt_in"
                       checked={formData.newsletter_opt_in}
-                      onCheckedChange={(checked) => {
+                      onChange={(e) => {
                         setFormData(prev => ({
                           ...prev,
-                          newsletter_opt_in: checked as boolean,
+                          newsletter_opt_in: e.target.checked as boolean,
                         }));
                       }}
                       disabled={isLoading}
@@ -459,10 +459,10 @@ export const MobileRegister: React.FC<MobileRegisterProps> = ({ onSuccess }) => 
                       id="accept_terms"
                       name="accept_terms"
                       checked={formData.accept_terms}
-                      onCheckedChange={(checked) => {
+                      onChange={(e) => {
                         setFormData(prev => ({
                           ...prev,
-                          accept_terms: checked as boolean,
+                          accept_terms: e.target.checked as boolean,
                         }));
                       }}
                       disabled={isLoading}

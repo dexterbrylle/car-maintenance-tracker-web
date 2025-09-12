@@ -91,18 +91,58 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
     } catch (error: any) {
       console.error('Login error:', error);
       
-      // Handle different error types
-      if (error.response?.data?.errors) {
-        // Form validation errors
-        setErrors(error.response.data.errors);
+      // Handle different error types with user-friendly messages
+      if (error.response?.data?.details) {
+        // Form validation errors from backend
+        const backendErrors = error.response.data.details;
+        const formattedErrors: Record<string, string> = {};
+        
+        Object.keys(backendErrors).forEach(key => {
+          const errorMessages = backendErrors[key];
+          if (Array.isArray(errorMessages)) {
+            formattedErrors[key] = errorMessages[0];
+          } else if (typeof errorMessages === 'string') {
+            formattedErrors[key] = errorMessages;
+          }
+        });
+        
+        setErrors(formattedErrors);
+        
+        // If there's a general error message, show it as submit error
+        if (error.response.data.message) {
+          setSubmitError(error.response.data.message);
+        }
       } else if (error.response?.data?.message) {
-        // API error message
-        setSubmitError(error.response.data.message);
+        // API error message - make it user-friendly
+        const apiMessage = error.response.data.message;
+        let userFriendlyMessage = apiMessage;
+        
+        // Transform technical messages to user-friendly ones
+        if (apiMessage.includes('Invalid email or password')) {
+          userFriendlyMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (apiMessage.includes('Unable to process your login')) {
+          userFriendlyMessage = 'Unable to process your login request. Please try again later.';
+        } else if (apiMessage.includes('Invalid request format')) {
+          userFriendlyMessage = 'Invalid request format. Please refresh the page and try again.';
+        }
+        
+        setSubmitError(userFriendlyMessage);
       } else if (error.message) {
         // Network or other error
-        setSubmitError(error.message);
+        let networkErrorMessage = error.message;
+        
+        // Transform network errors to user-friendly messages
+        if (error.message.includes('Network Error')) {
+          networkErrorMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (error.message.includes('timeout')) {
+          networkErrorMessage = 'Request timeout. Please try again.';
+        } else if (error.message.includes('Invalid response format from server')) {
+          networkErrorMessage = 'Server response error. Please try again later.';
+        }
+        
+        setSubmitError(networkErrorMessage);
       } else {
-        setSubmitError('An unexpected error occurred. Please try again.');
+        setSubmitError('An unexpected error occurred. Please try again later.');
       }
     }
   };
@@ -213,10 +253,10 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
                   id="remember_me"
                   name="remember_me"
                   checked={formData.remember_me}
-                  onCheckedChange={(checked) => {
+                  onChange={(e) => {
                     setFormData(prev => ({
                       ...prev,
-                      remember_me: checked as boolean,
+                      remember_me: e.target.checked as boolean,
                     }));
                   }}
                   disabled={isLoading}
