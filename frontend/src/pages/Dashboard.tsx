@@ -200,6 +200,9 @@ export function Dashboard() {
           <div className="mb-8">
             <VehicleHeader
               vehicle={selectedVehicle}
+              vehicles={vehicles}
+              selectedVehicleId={selectedVehicleId}
+              onVehicleChange={setSelectedVehicleId}
               onMileageUpdate={handleMileageUpdate}
             />
           </div>

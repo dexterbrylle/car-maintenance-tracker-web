@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from models import FillUp
 import os
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 
 def validate_fillup_data(data, is_update=False):
     """Validate fill-up data"""
@@ -111,7 +112,9 @@ def calculate_cost_per_km(distance, total_cost):
 def calculate_monthly_fuel_cost(vehicle_id, months=12):
     """Calculate monthly fuel cost for the specified number of months"""
     try:
-        fillups = FillUp.get_fillups_by_vehicle(vehicle_id)
+        # Ensure vehicle_id is an ObjectId for model methods
+        vehicle_obj_id = ObjectId(vehicle_id) if isinstance(vehicle_id, str) else vehicle_id
+        fillups = FillUp.get_fillups_by_vehicle(vehicle_obj_id)
         
         if not fillups:
             return {}
@@ -168,7 +171,9 @@ def calculate_monthly_fuel_cost(vehicle_id, months=12):
 def get_fuel_performance_trends(vehicle_id, days=90):
     """Get fuel performance trends for the specified number of days"""
     try:
-        fillups = FillUp.get_fillups_by_vehicle(vehicle_id)
+        # Ensure vehicle_id is an ObjectId for model methods
+        vehicle_obj_id = ObjectId(vehicle_id) if isinstance(vehicle_id, str) else vehicle_id
+        fillups = FillUp.get_fillups_by_vehicle(vehicle_obj_id)
         
         if not fillups:
             return None
@@ -226,7 +231,9 @@ def get_fuel_performance_trends(vehicle_id, days=90):
 def update_vehicle_fuel_stats(vehicle_id):
     """Update vehicle's aggregate fuel statistics"""
     try:
-        stats = FillUp.get_fuel_stats(vehicle_id)
+        # Ensure vehicle_id is an ObjectId for model methods
+        vehicle_obj_id = ObjectId(vehicle_id) if isinstance(vehicle_id, str) else vehicle_id
+        stats = FillUp.get_fuel_stats(vehicle_obj_id)
         
         if not stats:
             return
@@ -246,7 +253,9 @@ def update_vehicle_fuel_stats(vehicle_id):
 def get_fuel_efficiency_insights(vehicle_id):
     """Generate insights about fuel efficiency"""
     try:
-        trends = get_fuel_performance_trends(vehicle_id)
+        # Ensure vehicle_id is an ObjectId for model methods
+        vehicle_obj_id = ObjectId(vehicle_id) if isinstance(vehicle_id, str) else vehicle_id
+        trends = get_fuel_performance_trends(vehicle_obj_id)
         
         if not trends:
             return []

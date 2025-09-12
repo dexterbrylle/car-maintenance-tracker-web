@@ -1,15 +1,15 @@
 import axios from 'axios';
 import { Vehicle, MaintenanceItem, ServiceRecord, DashboardData, FuelRecord, FuelPerformanceMetrics as FuelPerformanceMetricsType, FuelMaintenanceInsightsData } from '../types';
-import { cachedFetch, CACHE_KEYS, CACHE_EXPIRY, invalidateVehicleCache } from './cache';
+import { cachedFetch, CACHE_KEYS, CACHE_EXPIRY, invalidateVehicleCache, cacheManager } from './cache';
 import { debounce } from './debounce';
 import { getAccessToken, refreshToken, getAuthHeader, storeTokens, handleApiError } from './auth';
 
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD 
+export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD 
   ? '/api'  // Production: proxy through nginx
   : 'http://localhost:5005/api');  // Development
 
 // Create axios instance with default configuration
-const axiosInstance = axios.create({
+export const axiosInstance = axios.create({
   timeout: 10000, // 10 second timeout
   headers: {
     'Content-Type': 'application/json',
@@ -32,8 +32,21 @@ axiosInstance.interceptors.request.use(
     }
     
     if (import.meta.env.DEV) {
-      console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
+      // Mask sensitive data in logs to prevent console exposure
+      const sanitizedData = config.data ? { ...config.data } : null;
+      if (sanitizedData && 'password' in sanitizedData) {
+        sanitizedData.password = '********';
+      }
+      if (sanitizedData && 'confirm_password' in sanitizedData) {
+        sanitizedData.confirm_password = '********';
+      }
+      console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, sanitizedData ? { data: sanitizedData } : '');
     }
+    
+    // Note: For complete password security in production:
+    // 1. Always use HTTPS to encrypt traffic
+    // 2. Consider adding request encryption for sensitive data
+    // 3. Implement proper security headers
     
     return config;
   },
@@ -181,7 +194,9 @@ export const api = {
   
   addVehicle: async (data: Partial<Vehicle>) => {
     const result = await axiosInstance.post<{ id: string; message: string }>(`${API_BASE}/vehicles`, data);
-    // Invalidate vehicles cache after adding
+    // Invalidate vehicles cache after adding to refresh the list
+    cacheManager.invalidate(CACHE_KEYS.VEHICLES);
+    // Also invalidate vehicle-specific cache
     invalidateVehicleCache(result.data.id || '');
     return result.data;
   },
@@ -204,6 +219,8 @@ export const api = {
     const result = await axiosInstance.delete<{ message: string }>(`${API_BASE}/vehicles/${id}`);
     // Invalidate cache for this vehicle
     invalidateVehicleCache(id);
+    // Also invalidate the vehicles list cache to refresh the UI
+    cacheManager.invalidate(CACHE_KEYS.VEHICLES);
     return result.data;
   },
 

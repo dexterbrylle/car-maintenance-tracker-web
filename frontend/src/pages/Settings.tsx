@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Vehicle } from "@/types"
-import { api } from "@/lib/api"
+import { api, axiosInstance, API_BASE } from "@/lib/api"
 import { Car, Plus, Edit, Trash2, Settings as SettingsIcon, AlertCircle } from "lucide-react"
 
 interface AppSettings {
@@ -45,9 +45,15 @@ export function Settings() {
     loadSettings()
   }, [])
 
-  const loadVehicles = async () => {
+  const loadVehicles = async (forceRefresh = false) => {
     try {
-      const response = await api.getVehicles()
+      let response
+      if (forceRefresh) {
+        // Force fresh data by bypassing cache
+        response = await axiosInstance.get(`${API_BASE}/vehicles`).then(res => res.data)
+      } else {
+        response = await api.getVehicles()
+      }
       const vehiclesData = Array.isArray(response) ? response : []
       setVehicles(vehiclesData)
     } catch (error) {
@@ -126,7 +132,9 @@ export function Settings() {
       }
       
       await api.addVehicle(vehicleData)
-      await loadVehicles()
+      
+      // Force refresh vehicles to ensure we get the latest data
+      await loadVehicles(true)
       setShowAddForm(false)
       setFormData({ make: "", model: "", year: new Date().getFullYear(), current_mileage: 0 })
     } catch (error: any) {
@@ -186,7 +194,7 @@ export function Settings() {
         year: editingVehicle.year,
         current_mileage: editingVehicle.current_mileage
       })
-      await loadVehicles()
+      await loadVehicles(true)
       setEditingVehicle(null)
     } catch (error: any) {
       console.error('Failed to update vehicle:', error)
@@ -208,7 +216,7 @@ export function Settings() {
     
     try {
       await api.deleteVehicle(vehicleId)
-      await loadVehicles()
+      await loadVehicles(true)
     } catch (error) {
       console.error('Failed to delete vehicle:', error)
     }

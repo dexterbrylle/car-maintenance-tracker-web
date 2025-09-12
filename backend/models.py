@@ -166,7 +166,7 @@ class MaintenanceItem:
         return result.modified_count > 0
 
     @staticmethod
-    def create_default_maintenance_items(vehicle_id):
+    def create_default_maintenance_items(vehicle_id, vehicle_data=None):
         vehicle_object_id = MaintenanceItem._safe_object_id(vehicle_id)
         if not vehicle_object_id:
             raise ValueError('Invalid vehicle ID')
@@ -174,13 +174,26 @@ class MaintenanceItem:
         # Import the official Mazda CX-5 2016 schedule
         from data.mazda_cx5_2016_philippines import MAZDA_CX5_2016_PHILIPPINES_SCHEDULE
 
+        # Check if it's a Mazda CX-5 2014-2017 (use original intervals)
+        is_mazda = vehicle_data and MaintenanceItem.should_create_mazda_schedule(vehicle_data)
+        
         default_items = []
         for item in MAZDA_CX5_2016_PHILIPPINES_SCHEDULE:
+            # For non-Mazda vehicles, reduce interval by 3000km (minimum 1000km)
+            interval_km = item['interval_km']
+            if not is_mazda:
+                interval_km = max(1000, interval_km - 3000)
+            
+            # Update description for non-Mazda vehicles
+            description = item['description']
+            if not is_mazda:
+                description = f"Generic {item['name'].lower()} maintenance schedule"
+            
             default_items.append({
                 'name': item['name'],
                 'category': item['category'],
-                'interval_km': item['interval_km'],
-                'description': item['description'],
+                'interval_km': interval_km,
+                'description': description,
                 'action': item['action'],
                 'vehicle_id': vehicle_object_id
             })
@@ -408,6 +421,17 @@ class FillUp:
                       if f['date'] and isinstance(f['date'], (datetime, str)) and
                       (datetime.fromisoformat(f['date'].replace('Z', '+00:00')) if isinstance(f['date'], str) else f['date']).year == current_year)
 
+        # Handle datetime serialization for last_fillup_date
+        last_fillup_date = None
+        if fillups:
+            valid_dates = [f['date'] for f in fillups if f['date']]
+            if valid_dates:
+                max_date = max(valid_dates)
+                if isinstance(max_date, datetime):
+                    last_fillup_date = max_date.isoformat()
+                else:
+                    last_fillup_date = max_date
+
         return {
             'avg_fuel_economy': round(sum(economies) / len(economies), 2) if economies else None,
             'best_fuel_economy': max(economies) if economies else None,
@@ -415,7 +439,7 @@ class FillUp:
             'avg_cost_per_km': round(sum(costs_per_km) / len(costs_per_km), 2) if costs_per_km else None,
             'total_fuel_cost_ytd': ytd_cost,
             'total_fillups': len(fillups),
-            'last_fillup_date': max(f['date'] for f in fillups if f['date']) if fillups else None
+            'last_fillup_date': last_fillup_date
         }
 
 class User:
