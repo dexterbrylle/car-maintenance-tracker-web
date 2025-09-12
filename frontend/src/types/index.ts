@@ -1,3 +1,5 @@
+export * from './auth';
+
 export interface Vehicle {
   _id: string;
   make: string;

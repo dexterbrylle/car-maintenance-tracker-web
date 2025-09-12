@@ -4,14 +4,22 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Vehicle } from "@/types"
-import { api } from "@/lib/api"
-import { Car, Plus, Edit, Trash2, Settings as SettingsIcon } from "lucide-react"
+import { api, axiosInstance, API_BASE } from "@/lib/api"
+import { Car, Plus, Edit, Trash2, Settings as SettingsIcon, AlertCircle } from "lucide-react"
 
 interface AppSettings {
   currency: string
   distance: string
   volume: string
+}
+
+interface ValidationError {
+  make?: string;
+  model?: string;
+  year?: string;
+  current_mileage?: string;
 }
 
 export function Settings() {
@@ -29,15 +37,23 @@ export function Settings() {
     year: new Date().getFullYear(),
     current_mileage: 0
   })
+  const [validationErrors, setValidationErrors] = useState<ValidationError>({})
+  const [apiError, setApiError] = useState<string>("")
 
   useEffect(() => {
     loadVehicles()
     loadSettings()
   }, [])
 
-  const loadVehicles = async () => {
+  const loadVehicles = async (forceRefresh = false) => {
     try {
-      const response = await api.getVehicles()
+      let response
+      if (forceRefresh) {
+        // Force fresh data by bypassing cache
+        response = await axiosInstance.get(`${API_BASE}/vehicles`).then(res => res.data)
+      } else {
+        response = await api.getVehicles()
+      }
       const vehiclesData = Array.isArray(response) ? response : []
       setVehicles(vehiclesData)
     } catch (error) {
@@ -58,31 +74,138 @@ export function Settings() {
     localStorage.setItem('appSettings', JSON.stringify(newSettings))
   }
 
+  const validateForm = (): boolean => {
+    const errors: ValidationError = {}
+    
+    // Validate make
+    if (!formData.make.trim()) {
+      errors.make = "Vehicle make is required"
+    } else if (formData.make.trim().length < 2) {
+      errors.make = "Vehicle make must be at least 2 characters"
+    }
+    
+    // Validate model
+    if (!formData.model.trim()) {
+      errors.model = "Vehicle model is required"
+    } else if (formData.model.trim().length < 2) {
+      errors.model = "Vehicle model must be at least 2 characters"
+    }
+    
+    // Validate year
+    const currentYear = new Date().getFullYear()
+    if (!formData.year || formData.year < 1900 || formData.year > currentYear + 1) {
+      errors.year = `Year must be between 1900 and ${currentYear + 1}`
+    }
+    
+    // Validate current mileage
+    if (formData.current_mileage < 0) {
+      errors.current_mileage = "Current mileage cannot be negative"
+    } else if (formData.current_mileage > 10000000) {
+      errors.current_mileage = "Current mileage seems too high (max 10,000,000)"
+    }
+    
+    setValidationErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const clearValidationErrors = () => {
+    setValidationErrors({})
+    setApiError("")
+  }
+
   const handleAddVehicle = async () => {
+    clearValidationErrors()
+    
+    // Validate form data
+    if (!validateForm()) {
+      return
+    }
+    
     try {
-      await api.addVehicle(formData)
-      await loadVehicles()
+      // Prepare data for API
+      const vehicleData = {
+        make: formData.make.trim(),
+        model: formData.model.trim(),
+        year: formData.year,
+        current_mileage: formData.current_mileage,
+        purchase_mileage: formData.current_mileage
+      }
+      
+      await api.addVehicle(vehicleData)
+      
+      // Force refresh vehicles to ensure we get the latest data
+      await loadVehicles(true)
       setShowAddForm(false)
       setFormData({ make: "", model: "", year: new Date().getFullYear(), current_mileage: 0 })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to add vehicle:', error)
+      
+      // Handle API errors
+      if (error.response?.data?.message) {
+        setApiError(error.response.data.message)
+      } else if (error.message) {
+        setApiError(error.message)
+      } else {
+        setApiError("Failed to add vehicle. Please try again.")
+      }
     }
   }
 
   const handleEditVehicle = async () => {
     if (!editingVehicle) return
     
+    clearValidationErrors()
+    
+    // Validate editing vehicle data
+    const errors: ValidationError = {}
+    
+    if (!editingVehicle.make.trim()) {
+      errors.make = "Vehicle make is required"
+    } else if (editingVehicle.make.trim().length < 2) {
+      errors.make = "Vehicle make must be at least 2 characters"
+    }
+    
+    if (!editingVehicle.model.trim()) {
+      errors.model = "Vehicle model is required"
+    } else if (editingVehicle.model.trim().length < 2) {
+      errors.model = "Vehicle model must be at least 2 characters"
+    }
+    
+    const currentYear = new Date().getFullYear()
+    if (!editingVehicle.year || editingVehicle.year < 1900 || editingVehicle.year > currentYear + 1) {
+      errors.year = `Year must be between 1900 and ${currentYear + 1}`
+    }
+    
+    if (editingVehicle.current_mileage < 0) {
+      errors.current_mileage = "Current mileage cannot be negative"
+    } else if (editingVehicle.current_mileage > 10000000) {
+      errors.current_mileage = "Current mileage seems too high (max 10,000,000)"
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors)
+      return
+    }
+    
     try {
       await api.updateVehicle(editingVehicle._id, {
-        make: editingVehicle.make,
-        model: editingVehicle.model,
+        make: editingVehicle.make.trim(),
+        model: editingVehicle.model.trim(),
         year: editingVehicle.year,
         current_mileage: editingVehicle.current_mileage
       })
-      await loadVehicles()
+      await loadVehicles(true)
       setEditingVehicle(null)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update vehicle:', error)
+      
+      if (error.response?.data?.message) {
+        setApiError(error.response.data.message)
+      } else if (error.message) {
+        setApiError(error.message)
+      } else {
+        setApiError("Failed to update vehicle. Please try again.")
+      }
     }
   }
 
@@ -93,7 +216,7 @@ export function Settings() {
     
     try {
       await api.deleteVehicle(vehicleId)
-      await loadVehicles()
+      await loadVehicles(true)
     } catch (error) {
       console.error('Failed to delete vehicle:', error)
     }
@@ -199,6 +322,12 @@ export function Settings() {
                     <CardDescription>Enter the details for your new vehicle</CardDescription>
                   </CardHeader>
                   <CardContent>
+                    {apiError && (
+                      <Alert variant="destructive" className="mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{apiError}</AlertDescription>
+                      </Alert>
+                    )}
                     <div className="grid gap-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -206,18 +335,42 @@ export function Settings() {
                           <Input
                             id="make"
                             value={formData.make}
-                            onChange={(e) => setFormData({...formData, make: e.target.value})}
+                            onChange={(e) => {
+                              setFormData({...formData, make: e.target.value})
+                              if (validationErrors.make) {
+                                setValidationErrors({...validationErrors, make: undefined})
+                              }
+                            }}
                             placeholder="e.g., Mazda"
+                            className={validationErrors.make ? "border-red-500 focus:border-red-500" : ""}
                           />
+                          {validationErrors.make && (
+                            <p className="text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {validationErrors.make}
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="model">Model</Label>
                           <Input
                             id="model"
                             value={formData.model}
-                            onChange={(e) => setFormData({...formData, model: e.target.value})}
+                            onChange={(e) => {
+                              setFormData({...formData, model: e.target.value})
+                              if (validationErrors.model) {
+                                setValidationErrors({...validationErrors, model: undefined})
+                              }
+                            }}
                             placeholder="e.g., CX-5"
+                            className={validationErrors.model ? "border-red-500 focus:border-red-500" : ""}
                           />
+                          {validationErrors.model && (
+                            <p className="text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {validationErrors.model}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -227,8 +380,21 @@ export function Settings() {
                             id="year"
                             type="number"
                             value={formData.year}
-                            onChange={(e) => setFormData({...formData, year: parseInt(e.target.value)})}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setFormData({...formData, year: value ? parseInt(value) : new Date().getFullYear()})
+                              if (validationErrors.year) {
+                                setValidationErrors({...validationErrors, year: undefined})
+                              }
+                            }}
+                            className={validationErrors.year ? "border-red-500 focus:border-red-500" : ""}
                           />
+                          {validationErrors.year && (
+                            <p className="text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {validationErrors.year}
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="mileage">Current Mileage ({settings.distance})</Label>
@@ -236,12 +402,28 @@ export function Settings() {
                             id="mileage"
                             type="number"
                             value={formData.current_mileage}
-                            onChange={(e) => setFormData({...formData, current_mileage: parseInt(e.target.value)})}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setFormData({...formData, current_mileage: value ? parseInt(value) : 0})
+                              if (validationErrors.current_mileage) {
+                                setValidationErrors({...validationErrors, current_mileage: undefined})
+                              }
+                            }}
+                            className={validationErrors.current_mileage ? "border-red-500 focus:border-red-500" : ""}
                           />
+                          {validationErrors.current_mileage && (
+                            <p className="text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {validationErrors.current_mileage}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setShowAddForm(false)}>
+                        <Button variant="outline" onClick={() => {
+                          setShowAddForm(false)
+                          clearValidationErrors()
+                        }}>
                           Cancel
                         </Button>
                         <Button onClick={handleAddVehicle}>Add Vehicle</Button>
@@ -298,6 +480,12 @@ export function Settings() {
                     <CardDescription>Update vehicle information</CardDescription>
                   </CardHeader>
                   <CardContent>
+                    {apiError && (
+                      <Alert variant="destructive" className="mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{apiError}</AlertDescription>
+                      </Alert>
+                    )}
                     <div className="grid gap-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -305,20 +493,44 @@ export function Settings() {
                           <Input
                             id="edit-make"
                             value={editingVehicle.make}
-                            onChange={(e) => setEditingVehicle(prev => 
-                              prev ? {...prev, make: e.target.value} : null
-                            )}
+                            onChange={(e) => {
+                              setEditingVehicle(prev => 
+                                prev ? {...prev, make: e.target.value} : null
+                              )
+                              if (validationErrors.make) {
+                                setValidationErrors({...validationErrors, make: undefined})
+                              }
+                            }}
+                            className={validationErrors.make ? "border-red-500 focus:border-red-500" : ""}
                           />
+                          {validationErrors.make && (
+                            <p className="text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {validationErrors.make}
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="edit-model">Model</Label>
                           <Input
                             id="edit-model"
                             value={editingVehicle.model}
-                            onChange={(e) => setEditingVehicle(prev => 
-                              prev ? {...prev, model: e.target.value} : null
-                            )}
+                            onChange={(e) => {
+                              setEditingVehicle(prev => 
+                                prev ? {...prev, model: e.target.value} : null
+                              )
+                              if (validationErrors.model) {
+                                setValidationErrors({...validationErrors, model: undefined})
+                              }
+                            }}
+                            className={validationErrors.model ? "border-red-500 focus:border-red-500" : ""}
                           />
+                          {validationErrors.model && (
+                            <p className="text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {validationErrors.model}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -328,10 +540,23 @@ export function Settings() {
                             id="edit-year"
                             type="number"
                             value={editingVehicle.year}
-                            onChange={(e) => setEditingVehicle(prev => 
-                              prev ? {...prev, year: parseInt(e.target.value)} : null
-                            )}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setEditingVehicle(prev => 
+                                prev ? {...prev, year: value ? parseInt(value) : new Date().getFullYear()} : null
+                              )
+                              if (validationErrors.year) {
+                                setValidationErrors({...validationErrors, year: undefined})
+                              }
+                            }}
+                            className={validationErrors.year ? "border-red-500 focus:border-red-500" : ""}
                           />
+                          {validationErrors.year && (
+                            <p className="text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {validationErrors.year}
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="edit-mileage">Current Mileage ({settings.distance})</Label>
@@ -339,14 +564,30 @@ export function Settings() {
                             id="edit-mileage"
                             type="number"
                             value={editingVehicle.current_mileage}
-                            onChange={(e) => setEditingVehicle(prev => 
-                              prev ? {...prev, current_mileage: parseInt(e.target.value)} : null
-                            )}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setEditingVehicle(prev => 
+                                prev ? {...prev, current_mileage: value ? parseInt(value) : 0} : null
+                              )
+                              if (validationErrors.current_mileage) {
+                                setValidationErrors({...validationErrors, current_mileage: undefined})
+                              }
+                            }}
+                            className={validationErrors.current_mileage ? "border-red-500 focus:border-red-500" : ""}
                           />
+                          {validationErrors.current_mileage && (
+                            <p className="text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              {validationErrors.current_mileage}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setEditingVehicle(null)}>
+                        <Button variant="outline" onClick={() => {
+                          setEditingVehicle(null)
+                          clearValidationErrors()
+                        }}>
                           Cancel
                         </Button>
                         <Button onClick={handleEditVehicle}>Save Changes</Button>

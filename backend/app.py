@@ -12,9 +12,29 @@ from flask_swagger_ui import get_swaggerui_blueprint
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
 
-# Swagger UI configuration
+# Enhanced CORS configuration
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://localhost:3000",  # Frontend dev (old)
+            "http://localhost:8080",  # Frontend prod (old)
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8080",
+            "http://localhost:5173",  # Vite dev server default
+            "http://localhost:5174",  # Vite dev server fallback
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:5174"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["Content-Type"],
+        "supports_credentials": True,
+        "max_age": 3600
+    }
+})
+
+# Swagger UI configuration  
 SWAGGER_URL = '/api/docs'
 API_URL = '/api/swagger.json'
 swaggerui_blueprint = get_swaggerui_blueprint(
@@ -26,13 +46,100 @@ swaggerui_blueprint = get_swaggerui_blueprint(
 )
 app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
+# Add basic HTML page for simpler documentation
+@app.route('/api/docs-simple')
+def simple_docs():
+    """Simple HTML documentation page"""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Car Maintenance Tracker API Documentation</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .endpoint { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+            .method { display: inline-block; padding: 4px 8px; border-radius: 3px; color: white; font-weight: bold; }
+            .post { background-color: #28a745; }
+            .get { background-color: #007bff; }
+            .put { background-color: #ffc107; color: black; }
+            .auth { background-color: #6f42c1; }
+        </style>
+    </head>
+    <body>
+        <h1>Car Maintenance Tracker API Documentation</h1>
+        <p><strong>Base URL:</strong> http://localhost:5005/api</p>
+        
+        <h2>Authentication Endpoints</h2>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span> /auth/register - Register new user
+            <br><strong>Body:</strong> {"email": "user@example.com", "password": "SecurePass123!", "first_name": "John", "last_name": "Doe"}
+            <br><strong>Response:</strong> 201 Created with user data and JWT tokens
+        </div>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span> /auth/login - User login
+            <br><strong>Body:</strong> {"email": "user@example.com", "password": "SecurePass123!"}
+            <br><strong>Response:</strong> 200 OK with user data and JWT tokens
+        </div>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span> /auth/refresh - Refresh JWT token
+            <br><strong>Body:</strong> {"refresh_token": "your_refresh_token"}
+            <br><strong>Response:</strong> 200 OK with new access token
+        </div>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span> /auth/logout - User logout
+            <br><strong>Headers:</strong> Authorization: Bearer your_access_token
+            <br><strong>Response:</strong> 200 OK
+        </div>
+        
+        <div class="endpoint">
+            <span class="method get">GET</span> /auth/profile - Get user profile
+            <br><strong>Headers:</strong> Authorization: Bearer your_access_token
+            <br><strong>Response:</strong> 200 OK with user profile data
+        </div>
+        
+        <div class="endpoint">
+            <span class="method put">PUT</span> /auth/profile - Update user profile
+            <br><strong>Headers:</strong> Authorization: Bearer your_access_token
+            <br><strong>Body:</strong> {"first_name": "Updated", "last_name": "Name", "phone": "+1234567890"}
+            <br><strong>Response:</strong> 200 OK with updated profile
+        </div>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span> /auth/forgot-password - Request password reset
+            <br><strong>Body:</strong> {"email": "user@example.com"}
+            <br><strong>Response:</strong> 200 OK
+        </div>
+        
+        <div class="endpoint">
+            <span class="method post">POST</span> /auth/reset-password - Reset password
+            <br><strong>Body:</strong> {"token": "reset_token", "new_password": "NewSecurePass123!"}
+            <br><strong>Response:</strong> 200 OK
+        </div>
+        
+        <h2>Other Endpoints</h2>
+        <p>Other endpoints (vehicles, maintenance, services, etc.) require authentication and follow similar patterns.</p>
+        
+        <h2>Authentication</h2>
+        <p>All protected endpoints require JWT token in Authorization header:</p>
+        <code>Authorization: Bearer your_access_token</code>
+        
+        <h2>Testing</h2>
+        <p>You can test endpoints using tools like Postman, curl, or the Swagger UI at <a href="/api/docs">/api/docs</a></p>
+    </body>
+    </html>
+    """
+
 @app.route('/api/swagger.json')
 def swagger_json():
     return {
         "swagger": "2.0",
         "info": {
             "title": "Car Maintenance Tracker API",
-            "description": "API for managing vehicle maintenance tracking",
+            "description": "API for managing vehicle maintenance tracking and authentication",
             "version": "1.0.0"
         },
         "host": f"localhost:{os.getenv('PORT', 5005)}",
@@ -387,6 +494,269 @@ def swagger_json():
                         }
                     }
                 }
+            },
+            "/auth/register": {
+                "post": {
+                    "summary": "Register a new user",
+                    "description": "Create a new user account with email and password",
+                    "tags": ["Authentication"],
+                    "parameters": [
+                        {
+                            "name": "user",
+                            "in": "body",
+                            "required": True,
+                            "schema": {
+                                "$ref": "#/definitions/UserRegistration"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "201": {
+                            "description": "User registered successfully",
+                            "schema": {
+                                "$ref": "#/definitions/AuthResponse"
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid input data"
+                        },
+                        "409": {
+                            "description": "Email already exists"
+                        },
+                        "429": {
+                            "description": "Too many registration attempts"
+                        }
+                    }
+                }
+            },
+            "/auth/login": {
+                "post": {
+                    "summary": "User login",
+                    "description": "Authenticate user with email and password",
+                    "tags": ["Authentication"],
+                    "parameters": [
+                        {
+                            "name": "credentials",
+                            "in": "body",
+                            "required": True,
+                            "schema": {
+                                "$ref": "#/definitions/LoginCredentials"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Login successful",
+                            "schema": {
+                                "$ref": "#/definitions/AuthResponse"
+                            }
+                        },
+                        "401": {
+                            "description": "Invalid credentials"
+                        },
+                        "429": {
+                            "description": "Too many login attempts"
+                        }
+                    }
+                }
+            },
+            "/auth/refresh": {
+                "post": {
+                    "summary": "Refresh access token",
+                    "description": "Refresh JWT access token using refresh token",
+                    "tags": ["Authentication"],
+                    "parameters": [
+                        {
+                            "name": "refresh_token",
+                            "in": "body",
+                            "required": True,
+                            "schema": {
+                                "type": "object",
+                                "required": ["refresh_token"],
+                                "properties": {
+                                    "refresh_token": {
+                                        "type": "string",
+                                        "description": "Refresh token"
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Token refreshed successfully",
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "access_token": {
+                                        "type": "string",
+                                        "description": "New access token"
+                                    }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Invalid refresh token"
+                        },
+                        "429": {
+                            "description": "Too many refresh attempts"
+                        }
+                    }
+                }
+            },
+            "/auth/logout": {
+                "post": {
+                    "summary": "User logout",
+                    "description": "Logout user and invalidate refresh token",
+                    "tags": ["Authentication"],
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "in": "header",
+                            "required": True,
+                            "type": "string",
+                            "description": "Bearer token"
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Logout successful"
+                        },
+                        "401": {
+                            "description": "Invalid token"
+                        }
+                    }
+                }
+            },
+            "/auth/profile": {
+                "get": {
+                    "summary": "Get user profile",
+                    "description": "Get current user profile information",
+                    "tags": ["Authentication"],
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "in": "header",
+                            "required": True,
+                            "type": "string",
+                            "description": "Bearer token"
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "User profile retrieved successfully",
+                            "schema": {
+                                "$ref": "#/definitions/UserProfile"
+                            }
+                        },
+                        "401": {
+                            "description": "Invalid token"
+                        }
+                    }
+                },
+                "put": {
+                    "summary": "Update user profile",
+                    "description": "Update current user profile information",
+                    "tags": ["Authentication"],
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "in": "header",
+                            "required": True,
+                            "type": "string",
+                            "description": "Bearer token"
+                        },
+                        {
+                            "name": "profile",
+                            "in": "body",
+                            "required": True,
+                            "schema": {
+                                "$ref": "#/definitions/UserProfileUpdate"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Profile updated successfully",
+                            "schema": {
+                                "$ref": "#/definitions/UserProfile"
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid input data"
+                        },
+                        "401": {
+                            "description": "Invalid token"
+                        }
+                    }
+                }
+            },
+            "/auth/forgot-password": {
+                "post": {
+                    "summary": "Request password reset",
+                    "description": "Send password reset email to user",
+                    "tags": ["Authentication"],
+                    "parameters": [
+                        {
+                            "name": "email",
+                            "in": "body",
+                            "required": True,
+                            "schema": {
+                                "type": "object",
+                                "required": ["email"],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "description": "User email address"
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Password reset email sent"
+                        },
+                        "400": {
+                            "description": "Invalid email"
+                        },
+                        "404": {
+                            "description": "Email not found"
+                        },
+                        "429": {
+                            "description": "Too many reset attempts"
+                        }
+                    }
+                }
+            },
+            "/auth/reset-password": {
+                "post": {
+                    "summary": "Reset password",
+                    "description": "Reset user password using reset token",
+                    "tags": ["Authentication"],
+                    "parameters": [
+                        {
+                            "name": "reset_data",
+                            "in": "body",
+                            "required": True,
+                            "schema": {
+                                "$ref": "#/definitions/PasswordReset"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Password reset successful"
+                        },
+                        "400": {
+                            "description": "Invalid input data"
+                        },
+                        "401": {
+                            "description": "Invalid or expired reset token"
+                        }
+                    }
+                }
             }
         },
         "definitions": {
@@ -675,6 +1045,144 @@ def swagger_json():
                         "description": "Current month fuel cost"
                     }
                 }
+            },
+            "UserRegistration": {
+                "type": "object",
+                "required": ["email", "password", "first_name", "last_name"],
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "User email address"
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "User password (minimum 8 characters, must contain uppercase, lowercase, number, and special character)"
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "description": "User first name"
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "description": "User last name"
+                    },
+                    "phone": {
+                        "type": "string",
+                        "description": "User phone number (optional)"
+                    }
+                }
+            },
+            "LoginCredentials": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "User email address"
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "User password"
+                    }
+                }
+            },
+            "AuthResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "Response message"
+                    },
+                    "user": {
+                        "$ref": "#/definitions/UserProfile"
+                    },
+                    "tokens": {
+                        "type": "object",
+                        "properties": {
+                            "access_token": {
+                                "type": "string",
+                                "description": "JWT access token"
+                            },
+                            "refresh_token": {
+                                "type": "string",
+                                "description": "JWT refresh token"
+                            }
+                        }
+                    }
+                }
+            },
+            "UserProfile": {
+                "type": "object",
+                "properties": {
+                    "_id": {
+                        "type": "string",
+                        "description": "User ID"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "User email address"
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "description": "User first name"
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "description": "User last name"
+                    },
+                    "phone": {
+                        "type": "string",
+                        "description": "User phone number"
+                    },
+                    "subscription_tier": {
+                        "type": "string",
+                        "enum": ["free", "personal", "family", "business"],
+                        "description": "User subscription tier"
+                    },
+                    "is_verified": {
+                        "type": "boolean",
+                        "description": "Whether the user's email is verified"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Account creation timestamp"
+                    }
+                }
+            },
+            "UserProfileUpdate": {
+                "type": "object",
+                "properties": {
+                    "first_name": {
+                        "type": "string",
+                        "description": "User first name"
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "description": "User last name"
+                    },
+                    "phone": {
+                        "type": "string",
+                        "description": "User phone number"
+                    }
+                }
+            },
+            "PasswordReset": {
+                "type": "object",
+                "required": ["token", "new_password"],
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "description": "Password reset token"
+                    },
+                    "new_password": {
+                        "type": "string",
+                        "description": "New password (minimum 8 characters, must contain uppercase, lowercase, number, and special character)"
+                    }
+                }
             }
         },
         "tags": [
@@ -701,14 +1209,23 @@ def swagger_json():
             {
                 "name": "Fuel Tracking",
                 "description": "Fuel fill-up tracking and analytics endpoints"
+            },
+            {
+                "name": "Authentication",
+                "description": "User authentication and account management endpoints"
             }
         ]
     }
 
 # MongoDB connection
-MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker')
+MONGODB_URI = os.getenv('MONGODB_URI')
 client = MongoClient(MONGODB_URI)
-db = client.get_default_database()
+
+# Extract database name from URI or use default
+from urllib.parse import urlparse
+parsed_uri = urlparse(MONGODB_URI)
+db_name = parsed_uri.path[1:] if parsed_uri.path else 'maintenance_tracker'
+db = client[db_name]
 
 # Custom JSON encoder for MongoDB ObjectId
 class MongoJSONEncoder(json.JSONEncoder):
@@ -721,9 +1238,24 @@ class MongoJSONEncoder(json.JSONEncoder):
 
 app.json_encoder = MongoJSONEncoder
 
+# Security middleware
+from security import add_security_headers, get_csp_headers
+
+@app.after_request
+def add_security_headers_middleware(response):
+    """Add security headers to all responses"""
+    response = add_security_headers(response)
+    
+    # Add CSP headers
+    csp_headers = get_csp_headers()
+    for header, value in csp_headers.items():
+        response.headers[header] = value
+    
+    return response
+
 # Import routes
 from routes import vehicles, maintenance, services, dashboard
-from routes import fillups, export
+from routes import fillups, export, auth
 
 # Register blueprints
 app.register_blueprint(vehicles.bp, url_prefix='/api/vehicles')
@@ -732,6 +1264,7 @@ app.register_blueprint(services.bp, url_prefix='/api/services')
 app.register_blueprint(dashboard.bp, url_prefix='/api/dashboard')
 app.register_blueprint(fillups.bp, url_prefix='/api/fillups')
 app.register_blueprint(export.bp, url_prefix='/api/export')
+app.register_blueprint(auth.bp, url_prefix='/api/auth')
 
 @app.route('/health')
 def health_check():

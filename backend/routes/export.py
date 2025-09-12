@@ -4,15 +4,22 @@ from bson.objectid import ObjectId
 from datetime import datetime
 import csv
 import io
+from auth import token_required, get_current_user_id
+from security import validate_json_request, sanitize_request_data
+from rate_limiter import user_rate_limit
 
 bp = Blueprint('export', __name__)
 
 @bp.route('/combined/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
 def export_combined_report(vehicle_id):
     """Export combined vehicle report with all data to CSV format"""
     try:
-        # Get vehicle info
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        user_id = get_current_user_id()
+        
+        # Get vehicle info and verify ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         

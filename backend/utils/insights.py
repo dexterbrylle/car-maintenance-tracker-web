@@ -3,6 +3,45 @@ from models import FillUp, MaintenanceItem, ServiceRecord
 from utils.fuel_calculations import get_fuel_performance_trends
 import os
 from pymongo import MongoClient
+from bson.objectid import ObjectId
+
+def serialize_maintenance_item(item):
+    """Convert MongoDB maintenance item document to JSON-serializable format"""
+    if item:
+        item = item.copy()
+        if '_id' in item:
+            item['_id'] = str(item['_id'])
+        if 'vehicle_id' in item:
+            item['vehicle_id'] = str(item['vehicle_id'])
+    return item
+
+def serialize_service_record(record):
+    """Convert MongoDB service record document to JSON-serializable format"""
+    if record:
+        record = record.copy()
+        if '_id' in record:
+            record['_id'] = str(record['_id'])
+        if 'vehicle_id' in record:
+            record['vehicle_id'] = str(record['vehicle_id'])
+        if 'maintenance_item_id' in record:
+            record['maintenance_item_id'] = str(record['maintenance_item_id'])
+        if 'created_at' in record and record['created_at']:
+            record['created_at'] = record['created_at'].isoformat()
+        if 'date' in record and record['date']:
+            record['date'] = record['date'].isoformat()
+    return record
+
+def serialize_vehicle(vehicle):
+    """Convert MongoDB vehicle document to JSON-serializable format"""
+    if vehicle:
+        vehicle = vehicle.copy()
+        if '_id' in vehicle:
+            vehicle['_id'] = str(vehicle['_id'])
+        if 'user_id' in vehicle:
+            vehicle['user_id'] = str(vehicle['user_id'])
+        if 'created_at' in vehicle and vehicle['created_at']:
+            vehicle['created_at'] = vehicle['created_at'].isoformat()
+    return vehicle
 
 def generate_insights(vehicle_id):
     """Generate actionable insights correlating fuel and maintenance"""
@@ -13,18 +52,20 @@ def generate_insights(vehicle_id):
         fuel_trends = get_fuel_performance_trends(vehicle_id)
         
         # Get maintenance data
-        client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/maintenance_tracker'))
+        client = MongoClient(os.getenv('MONGODB_URI'))
         db = client.get_default_database()
         
         # Get due maintenance items
-        maintenance_items = list(db.maintenance_items.find({'vehicle_id': vehicle_id}))
-        service_records = list(db.service_records.find({'vehicle_id': vehicle_id}).sort('date', -1))
+        vehicle_obj_id = ObjectId(vehicle_id) if isinstance(vehicle_id, str) else vehicle_id
+        maintenance_items = [serialize_maintenance_item(item) for item in db.maintenance_items.find({'vehicle_id': vehicle_obj_id})]
+        service_records = [serialize_service_record(record) for record in db.service_records.find({'vehicle_id': vehicle_obj_id}).sort('date', -1)]
         
         # Calculate maintenance status
         current_mileage = None
         if maintenance_items:
             # Get current mileage from the vehicle
-            vehicle = db.vehicles.find_one({'_id': vehicle_id})
+            vehicle_obj_id = ObjectId(vehicle_id) if isinstance(vehicle_id, str) else vehicle_id
+            vehicle = serialize_vehicle(db.vehicles.find_one({'_id': vehicle_obj_id}))
             if vehicle:
                 current_mileage = vehicle.get('current_mileage')
         
@@ -43,16 +84,16 @@ def generate_insights(vehicle_id):
                     miles_since_service = current_mileage - last_service['mileage']
                     if miles_since_service >= item['interval_km']:
                         due_maintenance.append({
-                            'item': item,
+                            'item': dict(item),  # Create a copy to ensure proper serialization
                             'miles_overdue': miles_since_service - item['interval_km'],
-                            'last_service': last_service
+                            'last_service': dict(last_service) if last_service else None  # Create a copy
                         })
                 else:
                     # No service record, check if overdue based on vehicle mileage
                     vehicle_age_miles = current_mileage
                     if vehicle_age_miles >= item['interval_km']:
                         due_maintenance.append({
-                            'item': item,
+                            'item': dict(item),  # Create a copy to ensure proper serialization
                             'miles_overdue': vehicle_age_miles - item['interval_km'],
                             'last_service': None
                         })
@@ -174,20 +215,23 @@ def generate_maintenance_insights(insights, due_maintenance):
 def get_fuel_performance_summary(vehicle_id):
     """Get comprehensive fuel performance summary"""
     try:
+        # Ensure vehicle_id is an ObjectId for model methods
+        vehicle_obj_id = ObjectId(vehicle_id) if isinstance(vehicle_id, str) else vehicle_id
+        
         # Get basic fuel stats
-        stats = FillUp.get_fuel_stats(vehicle_id)
+        stats = FillUp.get_fuel_stats(vehicle_obj_id)
         if not stats:
             return None
         
         # Get performance trends
-        trends = get_fuel_performance_trends(vehicle_id)
+        trends = get_fuel_performance_trends(vehicle_obj_id)
         
         # Calculate efficiency rating
         efficiency_rating = calculate_efficiency_rating(stats, trends)
         
         # Get monthly breakdown
         from utils.fuel_calculations import calculate_monthly_fuel_cost
-        monthly_breakdown = calculate_monthly_fuel_cost(vehicle_id, months=6)
+        monthly_breakdown = calculate_monthly_fuel_cost(vehicle_obj_id, months=6)
         
         return {
             'current_stats': stats,
@@ -282,8 +326,11 @@ def predict_maintenance_needs(vehicle_id):
     try:
         predictions = []
         
+        # Ensure vehicle_id is an ObjectId for model methods
+        vehicle_obj_id = ObjectId(vehicle_id) if isinstance(vehicle_id, str) else vehicle_id
+        
         # Get fuel performance data
-        trends = get_fuel_performance_trends(vehicle_id)
+        trends = get_fuel_performance_trends(vehicle_obj_id)
         if not trends:
             return predictions
         

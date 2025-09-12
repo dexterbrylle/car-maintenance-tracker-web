@@ -4,6 +4,9 @@ from bson.objectid import ObjectId
 from datetime import datetime
 import csv
 import io
+from auth import token_required, get_current_user_id, check_subscription_limits
+from security import validate_json_request, sanitize_request_data
+from rate_limiter import user_rate_limit
 
 bp = Blueprint('maintenance', __name__)
 
@@ -17,10 +20,14 @@ def serialize_maintenance_item(item):
     return item
 
 @bp.route('/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_maintenance_schedule(vehicle_id):
     try:
-        # Get vehicle info
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        user_id = get_current_user_id()
+        
+        # Get vehicle info and verify ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         
@@ -115,8 +122,12 @@ def get_maintenance_schedule(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('', methods=['POST'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
+@check_subscription_limits('records')
 def add_maintenance_item():
     try:
+        user_id = get_current_user_id()
         data = request.get_json()
         
         # Validate required fields
@@ -124,6 +135,11 @@ def add_maintenance_item():
         for field in required_fields:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(data['vehicle_id'], user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
         
         # Create maintenance item
         item_id = MaintenanceItem.create_maintenance_item(data)
@@ -134,9 +150,18 @@ def add_maintenance_item():
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/simple/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_simple_maintenance_items(vehicle_id):
     """Get simple maintenance items list for dashboard compatibility"""
     try:
+        user_id = get_current_user_id()
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
         maintenance_items = MaintenanceItem.get_maintenance_items_by_vehicle(vehicle_id)
         # Serialize each maintenance item to handle ObjectId and datetime
         serialized_items = [serialize_maintenance_item(item) for item in maintenance_items]
@@ -145,11 +170,15 @@ def get_simple_maintenance_items(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/export/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
 def export_maintenance_schedule(vehicle_id):
     """Export maintenance schedule to CSV format"""
     try:
-        # Get vehicle info
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        user_id = get_current_user_id()
+        
+        # Get vehicle info and verify ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         

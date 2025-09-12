@@ -4,9 +4,30 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
+        // Map semantic colors to CSS variables
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        card: 'hsl(var(--card))',
+        'card-foreground': 'hsl(var(--card-foreground))',
+        popover: 'hsl(var(--popover))',
+        'popover-foreground': 'hsl(var(--popover-foreground))',
+        primary: 'hsl(var(--primary))',
+        'primary-foreground': 'hsl(var(--primary-foreground))',
+        secondary: 'hsl(var(--secondary))',
+        'secondary-foreground': 'hsl(var(--secondary-foreground))',
+        muted: 'hsl(var(--muted))',
+        'muted-foreground': 'hsl(var(--muted-foreground))',
+        accent: 'hsl(var(--accent))',
+        'accent-foreground': 'hsl(var(--accent-foreground))',
+        destructive: 'hsl(var(--destructive))',
+        'destructive-foreground': 'hsl(var(--destructive-foreground))',
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
         slate: {
           50: '#f8fafc',
           100: '#f1f5f9',
@@ -34,6 +55,23 @@ export default {
           primary: '#0f172a',
           secondary: '#475569',
           tertiary: '#64748b',
+        },
+        // Dark mode colors
+        dark: {
+          background: {
+            primary: '#0f172a',
+            secondary: '#1e293b',
+            tertiary: '#334155',
+          },
+          text: {
+            primary: '#f8fafc',
+            secondary: '#cbd5e1',
+            tertiary: '#94a3b8',
+          },
+          border: '#334155',
+          muted: '#64748b',
+          accent: '#334155',
+          card: '#1e293b',
         }
       },
       fontSize: {

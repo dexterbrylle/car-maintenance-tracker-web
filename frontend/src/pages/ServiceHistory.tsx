@@ -10,16 +10,16 @@ import { ExportButton } from "@/components/ExportButton"
 import { useToast } from "@/components/ui/toast"
 import { Vehicle, ServiceRecord, MaintenanceItem } from "@/types"
 import { api } from "@/lib/api"
+import { useVehicles } from "@/hooks/useVehicles"
 import { History, Gauge, Edit, Save, X, Trash2, Search } from "lucide-react"
 import { MaintenanceStatsGrid } from "@/components/MaintenanceStatsGrid"
 
 export function ServiceHistory() {
   const { addToast } = useToast()
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("")
+  const { vehicles, selectedVehicleId, setSelectedVehicleId, loading: vehiclesLoading } = useVehicles()
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([])
   const [maintenanceItems, setMaintenanceItems] = useState<MaintenanceItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [dataLoading, setDataLoading] = useState(true)
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [filterType, setFilterType] = useState<string>("all")
   const [dateFilter, setDateFilter] = useState<string>("")
@@ -34,48 +34,30 @@ export function ServiceHistory() {
   })
 
   useEffect(() => {
-    loadVehicles()
-  }, [])
-
-  useEffect(() => {
-    if (selectedVehicleId) {
+    if (selectedVehicleId && !vehiclesLoading) {
       loadServiceRecords()
       loadMaintenanceItems()
     }
-  }, [selectedVehicleId])
-
-  const loadVehicles = async () => {
-    try {
-      const response = await api.getVehicles()
-      const vehiclesData = Array.isArray(response) ? response : []
-      setVehicles(vehiclesData)
-      if (vehiclesData.length > 0 && !selectedVehicleId) {
-        setSelectedVehicleId(vehiclesData[0]._id)
-      }
-    } catch (error) {
-      console.error('Failed to load vehicles:', error)
-      addToast({
-        variant: "error",
-        title: "Error",
-        description: "Failed to load vehicles"
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [selectedVehicleId, vehiclesLoading])
 
   const loadServiceRecords = async () => {
+    setDataLoading(true)
     try {
       const response = await api.getServices(selectedVehicleId)
       const serviceData = Array.isArray(response) ? response : []
       setServiceRecords(serviceData)
     } catch (error) {
       console.error('Failed to load service records:', error)
-      addToast({
-        variant: "error",
-        title: "Error",
-        description: "Failed to load service records"
-      })
+      // Only show error if not offline
+      if (navigator.onLine) {
+        addToast({
+          variant: "error",
+          title: "Error",
+          description: "Failed to load service records"
+        })
+      }
+    } finally {
+      setDataLoading(false)
     }
   }
 
@@ -86,11 +68,7 @@ export function ServiceHistory() {
       setMaintenanceItems(maintenanceData)
     } catch (error) {
       console.error('Failed to load maintenance items:', error)
-      addToast({
-        variant: "error",
-        title: "Error",
-        description: "Failed to load maintenance items"
-      })
+      // Don't show toast for maintenance items - service records can still work
     }
   }
 
@@ -212,7 +190,7 @@ export function ServiceHistory() {
 
   const selectedVehicle = vehicles?.find(v => v._id === selectedVehicleId)
 
-  if (loading) {
+  if (vehiclesLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 

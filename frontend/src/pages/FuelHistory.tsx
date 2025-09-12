@@ -9,8 +9,9 @@ import { ExportButton } from "@/components/ExportButton"
 import { VirtualTable } from "@/components/ui/virtual-table"
 import { FuelHistorySkeleton, VehicleSelectorSkeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/toast"
-import { Vehicle, FuelRecord, FuelPerformanceMetrics as FuelPerformanceMetricsType } from "@/types"
+import { FuelRecord } from "@/types"
 import { api, debouncedSearch } from "@/lib/api"
+import { useVehicles } from "@/hooks/useVehicles"
 import { 
   History, 
   Trash2, 
@@ -33,10 +34,8 @@ import {
 
 export function FuelHistory() {
   const { addToast } = useToast()
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("")
+  const { vehicles, selectedVehicleId, setSelectedVehicleId, loading: vehiclesLoading } = useVehicles()
   const [fuelRecords, setFuelRecords] = useState<FuelRecord[]>([])
-  const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
   const [showFillUpForm, setShowFillUpForm] = useState(false)
   const [dateFilter, setDateFilter] = useState<string>("")
@@ -75,34 +74,9 @@ export function FuelHistory() {
     [totalCost, totalDistance]
   )
 
-  // Load vehicles data
-  useEffect(() => {
-    const loadVehicles = async () => {
-      try {
-        const response = await api.getVehicles()
-        const vehiclesData = Array.isArray(response) ? response : []
-        setVehicles(vehiclesData)
-        if (vehiclesData.length > 0 && !selectedVehicleId) {
-          setSelectedVehicleId(vehiclesData[0]._id)
-        }
-      } catch (error) {
-        console.error('Failed to load vehicles:', error)
-        addToast({
-          variant: "error",
-          title: "Error",
-          description: "Failed to load vehicles"
-        })
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadVehicles()
-  }, [selectedVehicleId, addToast])
-
   // Load vehicle-specific data
   useEffect(() => {
-    if (!selectedVehicleId) return
+    if (!selectedVehicleId || vehiclesLoading) return
 
     const loadVehicleData = async () => {
       setDataLoading(true)
@@ -112,18 +86,21 @@ export function FuelHistory() {
         setFuelRecords(Array.isArray(fuelResponse) ? fuelResponse : [])
       } catch (error) {
         console.error('Failed to load vehicle data:', error)
-        addToast({
-          variant: "error",
-          title: "Error",
-          description: "Failed to load vehicle data"
-        })
+        // Only show error if not offline
+        if (navigator.onLine) {
+          addToast({
+            variant: "error",
+            title: "Error",
+            description: "Failed to load vehicle data"
+          })
+        }
       } finally {
         setDataLoading(false)
       }
     }
 
     loadVehicleData()
-  }, [selectedVehicleId, addToast])
+  }, [selectedVehicleId, vehiclesLoading, addToast])
 
   // Debounced search
   useEffect(() => {
@@ -132,7 +109,7 @@ export function FuelHistory() {
       return
     }
 
-    debouncedSearch.searchFuelRecords(selectedVehicleId, searchTerm, (results) => {
+    debouncedSearch.searchFuelRecords(selectedVehicleId || '', searchTerm, (results) => {
       setSearchResults(results)
     })
   }, [searchTerm, selectedVehicleId, fuelRecords])
@@ -221,7 +198,7 @@ export function FuelHistory() {
     [fuelRecords]
   )
 
-  if (loading) {
+  if (vehiclesLoading) {
     return <FuelHistorySkeleton />
   }
 
@@ -256,7 +233,7 @@ export function FuelHistory() {
                   ) : (
                     <VehicleSelector
                       vehicles={vehicles}
-                      selectedVehicleId={selectedVehicleId}
+                      selectedVehicleId={selectedVehicleId || ''}
                       onVehicleChange={setSelectedVehicleId}
                     />
                   )}

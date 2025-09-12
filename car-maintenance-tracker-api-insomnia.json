@@ -1,0 +1,227 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2023-09-12T00:58:00Z",
+  "__export_source": "car-maintenance-tracker-auth",
+  "resources": [
+    {
+      "_id": "req_auth_register",
+      "_type": "request",
+      "url": "{{base_url}}/auth/register",
+      "method": "POST",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"testuser@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"first_name\": \"Test\",\n  \"last_name\": \"User\",\n  \"phone\": \"+1234567890\"\n}"
+      },
+      "name": "Register New User",
+      "description": "Create a new user account with email and password. Password must be at least 8 characters with uppercase, lowercase, number, and special character."
+    },
+    {
+      "_id": "req_auth_login",
+      "_type": "request",
+      "url": "{{base_url}}/auth/login",
+      "method": "POST",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"testuser@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+      },
+      "name": "User Login",
+      "description": "Authenticate user with email and password. Returns JWT access and refresh tokens."
+    },
+    {
+      "_id": "req_auth_refresh",
+      "_type": "request",
+      "url": "{{base_url}}/auth/refresh",
+      "method": "POST",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+      },
+      "name": "Refresh Access Token",
+      "description": "Refresh JWT access token using refresh token. Access tokens expire after 1 hour."
+    },
+    {
+      "_id": "req_auth_profile_get",
+      "_type": "request",
+      "url": "{{base_url}}/auth/profile",
+      "method": "GET",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{access_token}}"
+        }
+      ],
+      "name": "Get User Profile",
+      "description": "Get current user profile information. Requires valid JWT access token."
+    },
+    {
+      "_id": "req_auth_profile_update",
+      "_type": "request",
+      "url": "{{base_url}}/auth/profile",
+      "method": "PUT",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{access_token}}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"first_name\": \"Updated\",\n  \"last_name\": \"Name\",\n  \"phone\": \"+9876543210\"\n}"
+      },
+      "name": "Update User Profile",
+      "description": "Update current user profile information. Requires valid JWT access token."
+    },
+    {
+      "_id": "req_auth_logout",
+      "_type": "request",
+      "url": "{{base_url}}/auth/logout",
+      "method": "POST",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{access_token}}"
+        }
+      ],
+      "name": "User Logout",
+      "description": "Logout user and invalidate refresh token. Requires valid JWT access token."
+    },
+    {
+      "_id": "req_auth_forgot_password",
+      "_type": "request",
+      "url": "{{base_url}}/auth/forgot-password",
+      "method": "POST",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"user@example.com\"\n}"
+      },
+      "name": "Forgot Password",
+      "description": "Send password reset email to user. Email must exist in system."
+    },
+    {
+      "_id": "req_auth_reset_password",
+      "_type": "request",
+      "url": "{{base_url}}/auth/reset-password",
+      "method": "POST",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"token\": \"reset_token_here\",\n  \"new_password\": \"NewSecurePass123!\"\n}"
+      },
+      "name": "Reset Password",
+      "description": "Reset user password using reset token. Token must be valid and not expired."
+    },
+    {
+      "_id": "req_health",
+      "_type": "request",
+      "url": "{{base_url}}/health",
+      "method": "GET",
+      "name": "Health Check",
+      "description": "Check if API and database are working"
+    },
+    {
+      "_id": "req_vehicles_get",
+      "_type": "request",
+      "url": "{{base_url}}/vehicles",
+      "method": "GET",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{access_token}}"
+        }
+      ],
+      "name": "Get Vehicles",
+      "description": "Get all vehicles for the authenticated user"
+    },
+    {
+      "_id": "req_vehicles_add",
+      "_type": "request",
+      "url": "{{base_url}}/vehicles",
+      "method": "POST",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{access_token}}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"make\": \"Toyota\",\n  \"model\": \"Camry\",\n  \"year\": 2020,\n  \"current_mileage\": 50000\n}"
+      },
+      "name": "Add Vehicle",
+      "description": "Add a new vehicle for the authenticated user"
+    }
+  ],
+  "environments": [
+    {
+      "_id": "env_dev",
+      "_type": "environment",
+      "name": "Development",
+      "values": [
+        {
+          "key": "base_url",
+          "value": "http://localhost:5005/api",
+          "enabled": true
+        },
+        {
+          "key": "access_token",
+          "value": "",
+          "enabled": true
+        },
+        {
+          "key": "refresh_token",
+          "value": "",
+          "enabled": true
+        },
+        {
+          "key": "user_id",
+          "value": "",
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "workspace": {
+    "_id": "wrk_car_maintenance_tracker",
+    "_type": "workspace",
+    "name": "Car Maintenance Tracker API",
+    "description": "Authentication and vehicle management API"
+  }
+}

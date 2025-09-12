@@ -32,6 +32,53 @@
   --color-text-secondary: #475569;
   --color-text-tertiary: #64748b;
 
+  /* Semantic Color Mappings (Light Mode) */
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #0f172a;
+  --primary-foreground: #f8fafc;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #dc2626;
+  --destructive-foreground: #f8fafc;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #64748b;
+}
+
+/* Dark Mode Variables */
+.dark {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+  --primary: #f8fafc;
+  --primary-foreground: #0f172a;
+  --secondary: #334155;
+  --secondary-foreground: #f8fafc;
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --accent: #334155;
+  --accent-foreground: #f8fafc;
+  --destructive: #dc2626;
+  --destructive-foreground: #f8fafc;
+  --border: #334155;
+  --input: #334155;
+  --ring: #64748b;
+}
+
+/* Root variables for spacing and sizing */
+:root {
   /* Spacing Scale */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -53,19 +100,19 @@
   --radius-2xl: 1.5rem;
 }
 
-/* Force light theme only */
-
 /* Base Styles */
 @layer base {
   * {
-    border-color: theme('colors.slate.200');
+    border-color: hsl(var(--border));
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
   }
   
   body {
-    background-color: var(--color-background);
-    color: var(--color-text-primary);
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-family: system-ui, -apple-system, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 

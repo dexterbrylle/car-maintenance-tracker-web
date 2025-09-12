@@ -4,6 +4,9 @@ from bson.objectid import ObjectId
 from datetime import datetime
 import csv
 import io
+from auth import token_required, get_current_user_id, check_subscription_limits
+from security import validate_json_request, sanitize_request_data
+from rate_limiter import user_rate_limit
 
 bp = Blueprint('services', __name__)
 
@@ -18,8 +21,17 @@ def serialize_service_record(record):
     return record
 
 @bp.route('/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_service_history(vehicle_id):
     try:
+        user_id = get_current_user_id()
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
         service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
         maintenance_items = MaintenanceItem.get_maintenance_items_by_vehicle(vehicle_id)
         
@@ -51,8 +63,12 @@ def get_service_history(vehicle_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('', methods=['POST'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
+@check_subscription_limits('records')
 def add_service_record():
     try:
+        user_id = get_current_user_id()
         data = request.get_json()
         
         # Validate required fields
@@ -61,15 +77,19 @@ def add_service_record():
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        # Validate that vehicle exists
-        vehicle = Vehicle.get_vehicle_by_id(data['vehicle_id'])
+        # Validate that vehicle exists and user owns it
+        vehicle = Vehicle.get_vehicle_by_id(data['vehicle_id'], user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         
-        # Validate that maintenance item exists
+        # Validate that maintenance item exists and belongs to the vehicle
         maintenance_item = MaintenanceItem.get_maintenance_item_by_id(data['maintenance_item_id'])
         if not maintenance_item:
             return jsonify({'error': 'Maintenance item not found'}), 404
+        
+        # Verify maintenance item belongs to the specified vehicle
+        if str(maintenance_item['vehicle_id']) != data['vehicle_id']:
+            return jsonify({'error': 'Maintenance item does not belong to this vehicle'}), 404
         
         # Validate mileage (must be >= current vehicle mileage)
         service_mileage = int(data['mileage'])
@@ -106,9 +126,22 @@ def add_service_record():
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<service_id>', methods=['PUT'])
+@token_required
+@user_rate_limit(limit=30, window_seconds=60)
 def update_service_record(service_id):
     try:
+        user_id = get_current_user_id()
         data = request.get_json()
+        
+        # Get service record to verify ownership
+        service_record = ServiceRecord.get_service_record_by_id(service_id)
+        if not service_record:
+            return jsonify({'error': 'Service record not found'}), 404
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(str(service_record['vehicle_id']), user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
         
         if ServiceRecord.update_service_record(service_id, data):
             return jsonify({'message': 'Service record updated successfully'}), 200
@@ -119,8 +152,22 @@ def update_service_record(service_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<service_id>', methods=['DELETE'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
 def delete_service_record(service_id):
     try:
+        user_id = get_current_user_id()
+        
+        # Get service record to verify ownership
+        service_record = ServiceRecord.get_service_record_by_id(service_id)
+        if not service_record:
+            return jsonify({'error': 'Service record not found'}), 404
+        
+        # Verify vehicle ownership
+        vehicle = Vehicle.get_vehicle_by_id(str(service_record['vehicle_id']), user_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        
         if ServiceRecord.delete_service_record(service_id):
             return jsonify({'message': 'Service record deleted successfully'}), 200
         else:
@@ -130,15 +177,19 @@ def delete_service_record(service_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/export/<vehicle_id>', methods=['GET'])
+@token_required
+@user_rate_limit(limit=10, window_seconds=60)
 def export_service_history(vehicle_id):
     try:
+        user_id = get_current_user_id()
+        
         # Get query parameters
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         columns = request.args.getlist('columns')
         
-        # Get vehicle info
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        # Get vehicle info and verify ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         

@@ -4,6 +4,9 @@ from bson.objectid import ObjectId
 from datetime import datetime
 from utils.insights import generate_insights, predict_maintenance_needs, get_fuel_performance_summary
 from utils.fuel_calculations import get_fuel_performance_trends, calculate_monthly_fuel_cost
+from auth import token_required, get_current_user_id
+from security import validate_json_request, sanitize_request_data
+from rate_limiter import user_rate_limit
 
 bp = Blueprint('dashboard', __name__)
 
@@ -39,25 +42,41 @@ def get_fuel_performance(vehicle_id):
     try:
         # Get recent fill-ups for fuel performance calculation
         recent_fillups = FillUp.get_fillups_by_vehicle(vehicle_id, limit=5)
-        
+
         if not recent_fillups:
             return None
-        
+
+        # Serialize fill-up documents to convert ObjectIds to strings
+        def serialize_fillup(fillup):
+            if fillup:
+                fillup = fillup.copy()
+                if '_id' in fillup:
+                    fillup['_id'] = str(fillup['_id'])
+                if 'vehicle_id' in fillup:
+                    fillup['vehicle_id'] = str(fillup['vehicle_id'])
+                if 'date' in fillup and isinstance(fillup['date'], datetime):
+                    fillup['date'] = fillup['date'].isoformat()
+                if 'created_at' in fillup and isinstance(fillup['created_at'], datetime):
+                    fillup['created_at'] = fillup['created_at'].isoformat()
+            return fillup
+
+        recent_fillups = [serialize_fillup(fillup) for fillup in recent_fillups]
+
         # Get basic fuel stats
         fuel_stats = FillUp.get_fuel_stats(vehicle_id)
         if not fuel_stats:
             return None
-        
+
         # Get performance trends
         trends = get_fuel_performance_trends(vehicle_id, days=90)
-        
+
         # Calculate monthly fuel cost
         monthly_costs = calculate_monthly_fuel_cost(vehicle_id, months=1)
         monthly_fuel_cost = monthly_costs[0]['total_cost'] if monthly_costs else 0
-        
+
         # Get the most recent fill-up for current metrics
         latest_fillup = recent_fillups[0]
-        
+
         return {
             "current_economy": latest_fillup.get('fuel_economy_kmpl'),
             "avg_economy_recent": fuel_stats.get('avg_fuel_economy'),
@@ -69,44 +88,50 @@ def get_fuel_performance(vehicle_id):
             "worst_fuel_economy": fuel_stats.get('worst_fuel_economy'),
             "trend_percent": trends.get('trend_percent') if trends else 0
         }
-        
+
     except Exception as e:
         print(f"Error getting fuel performance: {e}")
         return None
 
 @bp.route('/<vehicle_id>', methods=['GET'])
+# @token_required  # Temporarily disabled for testing
+@user_rate_limit(limit=100, window_seconds=60)
 def get_dashboard(vehicle_id):
     try:
-        # Get vehicle information
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        # For testing purposes, use a hardcoded user_id
+        # user_id = "68c3db4227f1eb5ab8e28917"  # get_current_user_id()
+        user_id = get_current_user_id()
+
+        # Get vehicle information and verify ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
-        
+
         # Get all maintenance items for the vehicle
-        maintenance_items = MaintenanceItem.get_maintenance_items_by_vehicle(vehicle_id)
-        
+        maintenance_items = [serialize_maintenance_item(item) for item in MaintenanceItem.get_maintenance_items_by_vehicle(vehicle_id)]
+
         # Get all service records for the vehicle
-        service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
-        
+        service_records = [serialize_service_record(record) for record in ServiceRecord.get_service_records_by_vehicle(vehicle_id)]
+
         # Calculate maintenance status for each item
         current_mileage = vehicle.get('current_mileage', 0)
         purchase_mileage = vehicle.get('purchase_mileage', 0)
-        
+
         due_now = []
         due_soon = []
         ok = []
-        
+
         for item in maintenance_items:
             # Find the most recent service record for this maintenance item
             item_id_str = str(item['_id'])
             relevant_services = [
-                s for s in service_records 
+                s for s in service_records
                 if str(s.get('maintenance_item_id')) == item_id_str
             ]
-            
+
             # Sort by mileage (descending) to get the most recent service
             relevant_services.sort(key=lambda x: x.get('mileage', 0), reverse=True)
-            
+
             if relevant_services:
                 last_service = relevant_services[0]
                 last_service_mileage = last_service.get('mileage', 0)
@@ -115,11 +140,11 @@ def get_dashboard(vehicle_id):
                 # Never serviced - use purchase mileage as baseline
                 last_service_mileage = purchase_mileage
                 last_service_date = None
-            
+
             # Calculate when this item is due
             interval_km = item.get('interval_km', 0)
             due_at_mileage = last_service_mileage + interval_km
-            
+
             # Determine status
             if current_mileage >= due_at_mileage:
                 # Due now
@@ -151,20 +176,73 @@ def get_dashboard(vehicle_id):
                     'last_service_mileage': last_service_mileage,
                     'due_at_mileage': due_at_mileage
                 })
-        
+
         # Sort each category by priority (overdue items first, then soonest due)
         due_now.sort(key=lambda x: x['miles_overdue'], reverse=True)
         due_soon.sort(key=lambda x: x['miles_until_due'])
         ok.sort(key=lambda x: x['miles_until_due'])
-        
+
         # Get fuel performance data
         fuel_performance = get_fuel_performance(vehicle_id)
-        
+
         # Generate smart insights
         insights = generate_insights(vehicle_id)
-        
-        return jsonify({
-            'vehicle': serialize_vehicle(vehicle),
+
+        # Ensure all data is properly serialized before JSON response
+        def deep_serialize(obj):
+            """Recursively serialize all ObjectIds and datetime objects"""
+            if isinstance(obj, dict):
+                return {k: deep_serialize(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [deep_serialize(item) for item in obj]
+            elif isinstance(obj, ObjectId):
+                return str(obj)
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif hasattr(obj, '__dict__') and hasattr(obj, 'binary'):  # ObjectId
+                return str(obj)
+            else:
+                return obj
+
+        # Debug: Check each component for ObjectIds before serialization
+        components = {
+            'vehicle': vehicle,
+            'due_now': due_now,
+            'due_soon': due_soon,
+            'ok': ok,
+            'fuel_performance': fuel_performance,
+            'insights': insights
+        }
+
+        def find_objectids(obj, path=""):
+            """Recursively find all ObjectIds in an object"""
+            objectids = []
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    objectids.extend(find_objectids(v, f"{path}.{k}" if path else k))
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    objectids.extend(find_objectids(item, f"{path}[{i}]"))
+            elif isinstance(obj, ObjectId):
+                objectids.append((path, str(obj)))
+            elif hasattr(obj, '__dict__') and hasattr(obj, 'binary'):
+                objectids.append((path, str(obj)))
+            return objectids
+
+        print("=== Checking for ObjectIds ===")
+        for name, component in components.items():
+            if component:
+                objectids = find_objectids(component)
+                if objectids:
+                    print(f"ObjectIds found in {name}:")
+                    for path, oid in objectids:
+                        print(f"  {path}: {oid}")
+                else:
+                    print(f"No ObjectIds in {name}")
+
+        # Apply deep serialization to all components
+        serialized_response = deep_serialize({
+            'vehicle': vehicle,
             'maintenance': {
                 'due_now': due_now,
                 'due_soon': due_soon,
@@ -172,34 +250,48 @@ def get_dashboard(vehicle_id):
             },
             'fuel_performance': fuel_performance,
             'insights': insights
-        }), 200
-        
+        })
+
+        return jsonify(serialized_response), 200
+
     except Exception as e:
+        import traceback
+        error_msg = f"Dashboard error: {str(e)}"
+        print(error_msg)
+        print(f"Traceback: {traceback.format_exc()}")
+        # Also write to a file for persistent logging
+        with open('dashboard_error.log', 'a') as f:
+            f.write(f"{datetime.now()}: {error_msg}\n")
+            f.write(f"Traceback: {traceback.format_exc()}\n")
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<vehicle_id>/insights', methods=['GET'])
+@token_required
+@user_rate_limit(limit=100, window_seconds=60)
 def get_insights(vehicle_id):
     """Get fuel-maintenance correlation insights for a vehicle"""
     try:
-        # Get vehicle information
-        vehicle = Vehicle.get_vehicle_by_id(vehicle_id)
+        user_id = get_current_user_id()
+
+        # Get vehicle information and verify ownership
+        vehicle = Vehicle.get_vehicle_by_id(vehicle_id, user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
-        
+
         # Generate fuel-maintenance insights
         insights = generate_insights(vehicle_id)
-        
+
         # Get maintenance predictions
         predictions = predict_maintenance_needs(vehicle_id)
-        
+
         # Get fuel performance summary
         fuel_summary = get_fuel_performance_summary(vehicle_id)
-        
+
         return jsonify({
             'insights': insights,
             'predictions': predictions,
             'fuel_summary': fuel_summary
         }), 200
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
