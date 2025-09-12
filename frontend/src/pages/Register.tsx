@@ -32,18 +32,15 @@ const timezones = [
 export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
   const { register, isLoading } = useAuth();
   const navigate = useNavigate();
-  
+
   const [formData, setFormData] = useState<RegisterFormData>({
     email: '',
     password: '',
     first_name: '',
     last_name: '',
-    phone: '',
-    timezone: 'UTC',
     accept_terms: false,
-    newsletter_opt_in: false,
   });
-  
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -61,7 +58,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }));
-    
+
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => {
@@ -70,63 +67,56 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
         return newErrors;
       });
     }
-    
+
     // Validate password strength when password changes
     if (name === 'password') {
       const strength = validatePassword(value);
       setPasswordStrength(strength);
-      
+
       // Clear password confirmation if password changes
       setConfirmPassword('');
     }
   };
 
-  const handleTimezoneChange = (value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      timezone: value,
-    }));
-  };
-
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    
+
     // Email validation
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!validateEmail(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
-    
+
     // Password validation
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (!passwordStrength.isValid) {
       newErrors.password = passwordStrength.errors.join(', ');
     }
-    
+
     // Confirm password validation
     if (!confirmPassword) {
       newErrors.confirm_password = 'Please confirm your password';
     } else if (formData.password !== confirmPassword) {
       newErrors.confirm_password = 'Passwords do not match';
     }
-    
+
     // First name validation
     if (!formData.first_name.trim()) {
       newErrors.first_name = 'First name is required';
     }
-    
+
     // Last name validation
     if (!formData.last_name.trim()) {
       newErrors.last_name = 'Last name is required';
     }
-    
+
     // Terms acceptance validation
     if (!formData.accept_terms) {
       newErrors.accept_terms = 'You must accept the terms and conditions';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -134,14 +124,14 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError('');
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       await register(formData);
-      
+
       // Call success callback if provided
       if (onSuccess) {
         onSuccess();
@@ -151,13 +141,13 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
       }
     } catch (error: any) {
       console.error('Registration error:', error);
-      
+
       // Handle different error types with user-friendly messages
       if (error.response?.data?.details) {
         // Form validation errors from backend
         const backendErrors = error.response.data.details;
         const formattedErrors: Record<string, string> = {};
-        
+
         Object.keys(backendErrors).forEach(key => {
           const errorMessages = backendErrors[key];
           if (Array.isArray(errorMessages)) {
@@ -166,9 +156,9 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
             formattedErrors[key] = errorMessages;
           }
         });
-        
+
         setErrors(formattedErrors);
-        
+
         // If there's a general error message, show it as submit error
         if (error.response.data.message) {
           setSubmitError(error.response.data.message);
@@ -177,7 +167,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
         // API error message - make it user-friendly
         const apiMessage = error.response.data.message;
         let userFriendlyMessage = apiMessage;
-        
+
         // Transform technical messages to user-friendly ones
         if (apiMessage.includes('User already exists')) {
           userFriendlyMessage = 'An account with this email already exists. Please try logging in or use a different email.';
@@ -190,12 +180,12 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
         } else if (apiMessage.includes('Invalid response format from server')) {
           userFriendlyMessage = 'Server response error. Please try again later.';
         }
-        
+
         setSubmitError(userFriendlyMessage);
       } else if (error.message) {
         // Network or other error
         let networkErrorMessage = error.message;
-        
+
         // Transform network errors to user-friendly messages
         if (error.message.includes('Network Error')) {
           networkErrorMessage = 'Network error. Please check your internet connection and try again.';
@@ -204,7 +194,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
         } else if (error.message.includes('Invalid response format from server')) {
           networkErrorMessage = 'Server response error. Please try again later.';
         }
-        
+
         setSubmitError(networkErrorMessage);
       } else {
         setSubmitError('An unexpected error occurred during registration. Please try again later.');
@@ -252,7 +242,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
             Start tracking your vehicle maintenance today
           </p>
         </div>
-        
+
         <Card>
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">Sign up</CardTitle>
@@ -260,7 +250,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
               Fill in the details below to create your account
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {submitError && (
@@ -269,7 +259,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                   <AlertDescription>{submitError}</AlertDescription>
                 </Alert>
               )}
-              
+
               {/* Name Fields */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -292,7 +282,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                     <p className="text-sm text-red-600">{errors.first_name}</p>
                   )}
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="last_name">Last name</Label>
                   <div className="relative">
@@ -314,7 +304,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                   )}
                 </div>
               </div>
-              
+
               {/* Email Field */}
               <div className="space-y-2">
                 <Label htmlFor="email">Email address</Label>
@@ -337,43 +327,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                   <p className="text-sm text-red-600">{errors.email}</p>
                 )}
               </div>
-              
-              {/* Phone Field */}
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone number (optional)</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    autoComplete="tel"
-                    className="pl-10"
-                    placeholder="+1 (555) 123-4567"
-                    value={formData.phone || ''}
-                    onChange={handleInputChange}
-                    disabled={isLoading}
-                  />
-                </div>
-              </div>
-              
-              {/* Timezone Field */}
-              <div className="space-y-2">
-                <Label htmlFor="timezone">Timezone</Label>
-                <Select value={formData.timezone} onValueChange={handleTimezoneChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your timezone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timezones.map((timezone) => (
-                      <SelectItem key={timezone} value={timezone}>
-                        {timezone}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
+
               {/* Password Field */}
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
@@ -404,7 +358,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                     )}
                   </button>
                 </div>
-                
+
                 {/* Password strength indicator */}
                 {formData.password && (
                   <div className="flex items-center space-x-2">
@@ -422,12 +376,12 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                     </span>
                   </div>
                 )}
-                
+
                 {errors.password && (
                   <p className="text-sm text-red-600">{errors.password}</p>
                 )}
               </div>
-              
+
               {/* Confirm Password Field */}
               <div className="space-y-2">
                 <Label htmlFor="confirm_password">Confirm password</Label>
@@ -462,26 +416,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                   <p className="text-sm text-red-600">{errors.confirm_password}</p>
                 )}
               </div>
-              
-              {/* Newsletter Opt-in */}
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="newsletter_opt_in"
-                  name="newsletter_opt_in"
-                  checked={formData.newsletter_opt_in}
-                  onChange={(e) => {
-                    setFormData(prev => ({
-                      ...prev,
-                      newsletter_opt_in: e.target.checked as boolean,
-                    }));
-                  }}
-                  disabled={isLoading}
-                />
-                <Label htmlFor="newsletter_opt_in" className="text-sm">
-                  Send me tips and updates about car maintenance
-                </Label>
-              </div>
-              
+
               {/* Terms Acceptance */}
               <div className="flex items-start space-x-2">
                 <Checkbox
@@ -513,7 +448,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                   )}
                 </div>
               </div>
-              
+
               {/* Submit Button */}
               <Button
                 type="submit"
@@ -530,7 +465,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
                 )}
               </Button>
             </form>
-            
+
             <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -544,7 +479,7 @@ export const Register: React.FC<RegisterProps> = ({ onSuccess }) => {
               </div>
             </div>
           </CardContent>
-          
+
           <CardFooter className="flex justify-center">
             <Link
               to="/login"

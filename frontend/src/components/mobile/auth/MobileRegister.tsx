@@ -8,25 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Car, Eye, EyeOff, Mail, Lock, User, Phone, AlertCircle, Loader2 } from 'lucide-react';
+import { Car, Eye, EyeOff, Mail, Lock, User, AlertCircle, Loader2 } from 'lucide-react';
 import { RegisterFormData } from '@/types/auth';
 
 interface MobileRegisterProps {
   onSuccess?: () => void;
 }
-
-const timezones = [
-  'UTC',
-  'America/New_York',
-  'America/Los_Angeles',
-  'Europe/London',
-  'Europe/Paris',
-  'Asia/Tokyo',
-  'Asia/Shanghai',
-  'Asia/Singapore',
-  'Australia/Sydney',
-];
 
 export const MobileRegister: React.FC<MobileRegisterProps> = ({ onSuccess }) => {
   const { register, isLoading } = useAuth();
@@ -37,10 +24,7 @@ export const MobileRegister: React.FC<MobileRegisterProps> = ({ onSuccess }) => 
     password: '',
     first_name: '',
     last_name: '',
-    phone: '',
-    timezone: 'UTC',
     accept_terms: false,
-    newsletter_opt_in: false,
   });
   
   const [showPassword, setShowPassword] = useState(false);
@@ -78,13 +62,6 @@ export const MobileRegister: React.FC<MobileRegisterProps> = ({ onSuccess }) => 
       // Clear password confirmation if password changes
       setConfirmPassword('');
     }
-  };
-
-  const handleTimezoneChange = (value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      timezone: value,
-    }));
   };
 
   const validateForm = (): boolean => {
@@ -309,41 +286,6 @@ export const MobileRegister: React.FC<MobileRegisterProps> = ({ onSuccess }) => 
                     )}
                   </div>
                   
-                  {/* Phone Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-sm font-medium">Phone (optional)</Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="phone"
-                        name="phone"
-                        type="tel"
-                        autoComplete="tel"
-                        className="pl-10"
-                        placeholder="+1 (555) 123-4567"
-                        value={formData.phone || ''}
-                        onChange={handleInputChange}
-                        disabled={isLoading}
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Timezone Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="timezone" className="text-sm font-medium">Timezone</Label>
-                    <Select value={formData.timezone} onValueChange={handleTimezoneChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select timezone" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {timezones.map((timezone) => (
-                          <SelectItem key={timezone} value={timezone}>
-                            {timezone}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
                   
                   {/* Password Field */}
                   <div className="space-y-2">
@@ -434,24 +376,6 @@ export const MobileRegister: React.FC<MobileRegisterProps> = ({ onSuccess }) => 
                     )}
                   </div>
                   
-                  {/* Newsletter Opt-in */}
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="newsletter_opt_in"
-                      name="newsletter_opt_in"
-                      checked={formData.newsletter_opt_in}
-                      onChange={(e) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          newsletter_opt_in: e.target.checked as boolean,
-                        }));
-                      }}
-                      disabled={isLoading}
-                    />
-                    <Label htmlFor="newsletter_opt_in" className="text-sm">
-                      Send me tips and updates
-                    </Label>
-                  </div>
                   
                   {/* Terms Acceptance */}
                   <div className="flex items-start space-x-2">

@@ -51,12 +51,12 @@ export interface UserLimits {
 
 export type SubscriptionTier = 'free' | 'basic' | 'premium' | 'enterprise';
 
-export type SubscriptionStatus = 
-  | 'active' 
-  | 'inactive' 
-  | 'cancelled' 
-  | 'expired' 
-  | 'pending' 
+export type SubscriptionStatus =
+  | 'active'
+  | 'inactive'
+  | 'cancelled'
+  | 'expired'
+  | 'pending'
   | 'suspended'
   | 'trialing';
 
@@ -94,10 +94,7 @@ export interface RegisterData {
   password: string;
   first_name: string;
   last_name: string;
-  phone?: string;
-  timezone?: string;
   accept_terms: boolean;
-  newsletter_opt_in?: boolean;
 }
 
 export interface ForgotPasswordData {

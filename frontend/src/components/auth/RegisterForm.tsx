@@ -28,10 +28,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     password: '',
     first_name: '',
     last_name: '',
-    phone: '',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    accept_terms: false,
-    newsletter_opt_in: false
+    accept_terms: false
   });
   
   const [showPassword, setShowPassword] = useState(false);
@@ -217,20 +214,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="phone">Phone number (optional)</Label>
-          <Input
-            id="phone"
-            name="phone"
-            type="tel"
-            autoComplete="tel"
-            placeholder="+1 (555) 123-4567"
-            value={formData.phone || ''}
-            onChange={handleInputChange}
-            disabled={isSubmitting}
-          />
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
           <div className="relative">
             <Input
@@ -290,21 +273,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
           {errors.accept_terms && (
             <p className="text-sm text-red-600">{errors.accept_terms}</p>
           )}
-
-          <div className="flex items-start space-x-2">
-            <Checkbox
-              id="newsletter_opt_in"
-              name="newsletter_opt_in"
-              checked={formData.newsletter_opt_in || false}
-              onChange={(e) => 
-                setFormData(prev => ({ ...prev, newsletter_opt_in: e.target.checked as boolean }))
-              }
-              disabled={isSubmitting}
-            />
-            <Label htmlFor="newsletter_opt_in" className="text-sm leading-normal">
-              I'd like to receive updates and tips about car maintenance (optional)
-            </Label>
-          </div>
         </div>
 
         <Button

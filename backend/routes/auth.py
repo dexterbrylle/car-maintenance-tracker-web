@@ -1,14 +1,15 @@
 from flask import Blueprint, request, jsonify
-from models import User, RefreshToken
+from models import User, RefreshToken, db
 from auth import (
     create_access_token, create_refresh_token,
     verify_jwt_token, get_current_user, get_current_user_id,
-    refresh_access_token
+    refresh_access_token, serialize_user
 )
 from rate_limiter import (
     register_rate_limit, login_attempts_rate_limit,
     password_reset_rate_limit, user_rate_limit, refresh_token_rate_limit
 )
+from bson.objectid import ObjectId
 import re
 from datetime import datetime, timedelta
 
@@ -53,7 +54,10 @@ def register():
         # Create user
         user_id = User.create_user(data)
 
-        # Get user data (without sensitive fields)
+        # Get full user data for verification token
+        full_user = db.users.find_one({'_id': ObjectId(user_id)})
+        
+        # Get user data (without sensitive fields) 
         user = User.get_user_by_id(user_id)
 
         # Create tokens
@@ -62,19 +66,14 @@ def register():
 
         # TODO: Send verification email
         # In a real implementation, you would send an email with the verification link
-        verification_link = f"{request.host_url}verify-email?token={user['verification_token']}&user_id={user_id}"
+        verification_link = f"{request.host_url}verify-email?token={full_user['verification_token']}&user_id={user_id}"
+
+        # Serialize user data for JSON response
+        serialized_user = serialize_user(user)
 
         return jsonify({
             'message': 'User registered successfully. Please check your email for verification.',
-            'user': {
-                'id': str(user['_id']),
-                'email': user['email'],
-                'first_name': user['first_name'],
-                'last_name': user['last_name'],
-                'subscription_tier': user['subscription_tier'],
-                'is_verified': user['is_verified'],
-                'preferences': user['preferences']
-            },
+            'user': serialized_user,
             'tokens': {
                 'access_token': access_token,
                 'refresh_token': refresh_token,
