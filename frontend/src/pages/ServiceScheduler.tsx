@@ -86,7 +86,7 @@ export function ServiceSchedulerPage() {
 
   const loadSchedule = async () => {
     if (!selectedVehicleId) return
-    
+
     try {
       const scheduleResponse = await api.getMaintenanceSchedule(selectedVehicleId)
       setScheduleData(scheduleResponse)
@@ -151,7 +151,7 @@ export function ServiceSchedulerPage() {
     })
   }
 
-  
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
@@ -319,20 +319,19 @@ export function ServiceSchedulerPage() {
                                     )}
                                   </div>
                                 </div>
-                                
+
                                 <div className="flex items-center justify-between">
                                   <div className="text-sm text-muted-foreground">
                                     {item.service_count > 0 ? (
                                       <>
-                                        Last service: {item.last_service_date ? new Date(item.last_service_date).toLocaleDateString() : 'Unknown'} 
-                                        at {item.last_service_mileage?.toLocaleString() || 'Unknown'} km
+                                        Last service: {item.last_service_date ? new Date(item.last_service_date).toLocaleDateString() : 'Unknown'} at {item.last_service_mileage?.toLocaleString() || 'Unknown'} km
                                         ({item.service_count} time{item.service_count !== 1 ? 's' : ''})
                                       </>
                                     ) : (
                                       'Never serviced'
                                     )}
                                   </div>
-                                  
+
                                   {(item.status === 'due' || item.status === 'due_soon') && (
                                     <Button
                                       size="sm"

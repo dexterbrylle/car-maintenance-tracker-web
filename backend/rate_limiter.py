@@ -178,3 +178,16 @@ def login_attempts_rate_limit():
 def refresh_token_rate_limit():
     """Rate limiting for token refresh"""
     return token_refresh_rate_limit(limit=10, window_seconds=60)  # 10 per minute
+
+def burst_rate_limit(limit=20, window_seconds=10):
+    """Burst rate limiting for rapid consecutive requests (like batch operations)"""
+    def key_func():
+        from auth import get_current_user_id
+        user_id = get_current_user_id()
+        return f"burst:{user_id}" if user_id else request.remote_addr
+    
+    return rate_limit(limit, window_seconds, key_func, "BURST_RATE_LIMIT_EXCEEDED")
+
+def service_operations_rate_limit():
+    """Rate limiting for service operations (create, update, delete)"""
+    return burst_rate_limit(limit=30, window_seconds=15)  # 30 operations per 15 seconds

@@ -6,7 +6,7 @@ import csv
 import io
 from auth import token_required, get_current_user_id, check_subscription_limits
 from security import validate_json_request, sanitize_request_data
-from rate_limiter import user_rate_limit
+from rate_limiter import user_rate_limit, service_operations_rate_limit
 
 bp = Blueprint('services', __name__)
 
@@ -64,7 +64,7 @@ def get_service_history(vehicle_id):
 
 @bp.route('', methods=['POST'])
 @token_required
-@user_rate_limit(limit=10, window_seconds=60)
+@service_operations_rate_limit()
 @check_subscription_limits('records')
 def add_service_record():
     try:
@@ -103,7 +103,23 @@ def add_service_record():
         # Validate cost (must be positive if provided)
         if 'cost' in data and data['cost'] < 0:
             return jsonify({'error': 'Cost must be positive'}), 400
-        
+
+        # Check for duplicate service on the same date
+        existing_services = ServiceRecord.get_service_records_by_vehicle(data['vehicle_id'])
+
+        # Normalize dates for comparison (ignore time component)
+        new_date = data['date'].split('T')[0] if 'T' in data['date'] else data['date']
+
+        for existing_service in existing_services:
+            existing_date = existing_service['date'].split('T')[0] if 'T' in existing_service['date'] else existing_service['date']
+
+            if (existing_date == new_date and
+                str(existing_service['maintenance_item_id']) == data['maintenance_item_id']):
+                return jsonify({
+                    'error': 'Duplicate service record',
+                    'details': [f'A {maintenance_item.get("name", "service")} record already exists for this date']
+                }), 400
+
         # Create service record
         service_id = ServiceRecord.create_service_record(data)
         
@@ -127,33 +143,52 @@ def add_service_record():
 
 @bp.route('/<service_id>', methods=['PUT'])
 @token_required
-@user_rate_limit(limit=30, window_seconds=60)
+@service_operations_rate_limit()
 def update_service_record(service_id):
     try:
         user_id = get_current_user_id()
         data = request.get_json()
-        
+
         # Get service record to verify ownership
         service_record = ServiceRecord.get_service_record_by_id(service_id)
         if not service_record:
             return jsonify({'error': 'Service record not found'}), 404
-        
+
         # Verify vehicle ownership
         vehicle = Vehicle.get_vehicle_by_id(str(service_record['vehicle_id']), user_id)
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
-        
+
+        # Check for duplicate service on the same date (excluding current record)
+        if 'date' in data and 'maintenance_item_id' in data:
+            vehicle_id = str(service_record['vehicle_id'])
+            existing_services = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
+
+            # Normalize dates for comparison (ignore time component)
+            new_date = data['date'].split('T')[0] if 'T' in data['date'] else data['date']
+
+            for existing_service in existing_services:
+                if str(existing_service['_id']) != service_id:  # Exclude current record
+                    existing_date = existing_service['date'].split('T')[0] if 'T' in existing_service['date'] else existing_service['date']
+
+                    if (existing_date == new_date and
+                        str(existing_service['maintenance_item_id']) == data['maintenance_item_id']):
+                        return jsonify({
+                            'error': 'Duplicate service record',
+                            'details': [f'A {existing_service.get("maintenance_item", {}).get("name", "service")} record already exists for this date']
+                        }), 400
+
         if ServiceRecord.update_service_record(service_id, data):
             return jsonify({'message': 'Service record updated successfully'}), 200
         else:
             return jsonify({'error': 'Service record not found'}), 404
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<service_id>', methods=['DELETE'])
 @token_required
-@user_rate_limit(limit=10, window_seconds=60)
+@service_operations_rate_limit()
 def delete_service_record(service_id):
     try:
         user_id = get_current_user_id()

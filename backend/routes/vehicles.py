@@ -101,10 +101,27 @@ def update_vehicle(vehicle_id):
 
         data = request.get_json()
 
-        # Validate input
-        validation = validation_result(validate_vehicle_data(data))
-        if not validation['valid']:
-            return jsonify({'error': 'Validation failed', 'details': validation['errors']}), 400
+        # Validate input - for partial updates, only validate provided fields
+        if 'make' in data or 'model' in data or 'year' in data:
+            # Full validation when updating core vehicle info
+            validation = validation_result(validate_vehicle_data(data))
+            if not validation['valid']:
+                return jsonify({'error': 'Validation failed', 'details': validation['errors']}), 400
+        else:
+            # Partial update validation (e.g., just mileage)
+            errors = []
+            if 'current_mileage' in data:
+                try:
+                    mileage = int(data['current_mileage'])
+                    if mileage < 0:
+                        errors.append('Current mileage must be a positive number')
+                    elif mileage > 10000000:  # Reasonable upper limit
+                        errors.append('Current mileage seems too high')
+                except (ValueError, TypeError):
+                    errors.append('Current mileage must be a valid number')
+
+            if errors:
+                return jsonify({'error': 'Validation failed', 'details': errors}), 400
 
         if Vehicle.update_vehicle(vehicle_id, data, user_id):
             return jsonify({'message': 'Vehicle updated successfully'}), 200
