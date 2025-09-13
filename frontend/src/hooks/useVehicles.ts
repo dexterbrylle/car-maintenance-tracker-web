@@ -24,7 +24,7 @@ export function useVehicles(): UseVehiclesReturn {
   const [selectedVehicleId, setSelectedVehicleIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const { showError } = useError();
+  const { showError, showNetworkError, showServerError, showSuccess } = useError();
   const navigate = useNavigate();
 
   const refreshVehicles = useCallback(async () => {
@@ -46,10 +46,7 @@ export function useVehicles(): UseVehiclesReturn {
       if (vehiclesData.length === 0) {
         // Only show this message if not already on settings page
         if (!window.location.pathname.includes('/settings')) {
-          showError("Let's add your first vehicle to get started", {
-            title: "No Vehicles Found",
-            variant: "info"
-          });
+          showSuccess("Let's add your first vehicle to get started");
           navigate('/settings');
         }
       }
@@ -62,19 +59,11 @@ export function useVehicles(): UseVehiclesReturn {
         
         // Only show toast for actual errors, not suppressed duplicates
         if (err.code !== 'VEHICLES_LOAD_ERROR_SUPPRESSED') {
-          showError(err, {
-            description: "Failed to load vehicles. Please try again later.",
-            errorKey: 'vehicles_load_error',
-            suppressDuplicate: true
-          });
+          showNetworkError(err);
         }
       } else if (err instanceof Error) {
         setError(err);
-        showError(err, {
-          description: "An unexpected error occurred while loading vehicles.",
-          errorKey: 'vehicles_load_unexpected',
-          suppressDuplicate: true
-        });
+        showServerError(err);
       }
     } finally {
       setLoading(false);

@@ -8,17 +8,71 @@ import { VehicleSelector } from "@/components/VehicleSelector"
 import { ServiceForm } from "@/components/ServiceForm"
 import { ExportButton } from "@/components/ExportButton"
 import { useToast } from "@/components/ui/toast"
-import { Vehicle, ServiceRecord, MaintenanceItem } from "@/types"
+import { Vehicle, ServiceRecord, MaintenanceItem, DashboardData } from "@/types"
 import { api } from "@/lib/api"
 import { useVehicles } from "@/hooks/useVehicles"
-import { History, Gauge, Edit, Save, X, Trash2, Search } from "lucide-react"
+import { History, Gauge, Edit, Save, X, Trash2, Search, AlertTriangle, Clock, CheckCircle } from "lucide-react"
 import { MaintenanceStatsGrid } from "@/components/MaintenanceStatsGrid"
+
+// Utility function to calculate maintenance status locally
+interface MaintenanceItemWithStatus extends MaintenanceItem {
+  status: 'due_now' | 'due_soon' | 'up_to_date'
+  miles_until_due: number
+  miles_overdue: number
+  due_at_mileage: number
+  last_service_mileage: number
+  service_count: number
+}
+
+function calculateMaintenanceStatus(
+  maintenanceItems: MaintenanceItem[],
+  serviceRecords: ServiceRecord[],
+  currentMileage: number,
+  purchaseMileage: number
+): MaintenanceItemWithStatus[] {
+  return maintenanceItems.map(item => {
+    const relevantServices = serviceRecords.filter(
+      record => record.maintenance_item_id === item._id
+    ).sort((a, b) => b.mileage - a.mileage)
+
+    const lastService = relevantServices[0]
+    const lastServiceMileage = lastService ? lastService.mileage : purchaseMileage
+    const dueAtMileage = lastServiceMileage + item.interval_km
+
+    let status: 'due_now' | 'due_soon' | 'up_to_date'
+    let milesUntilDue = 0
+    let milesOverdue = 0
+
+    if (currentMileage >= dueAtMileage) {
+      status = 'due_now'
+      milesOverdue = currentMileage - dueAtMileage
+    } else if (currentMileage >= dueAtMileage - 1000) {
+      status = 'due_soon'
+      milesUntilDue = dueAtMileage - currentMileage
+    } else {
+      status = 'up_to_date'
+      milesUntilDue = dueAtMileage - currentMileage
+    }
+
+    return {
+      ...item,
+      status,
+      miles_until_due: milesUntilDue,
+      miles_overdue: milesOverdue,
+      due_at_mileage: dueAtMileage,
+      last_service_mileage: lastServiceMileage,
+      service_count: relevantServices.length
+    }
+  })
+}
 
 export function ServiceHistory() {
   const { addToast } = useToast()
   const { vehicles, selectedVehicleId, setSelectedVehicleId, loading: vehiclesLoading } = useVehicles()
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([])
   const [maintenanceItems, setMaintenanceItems] = useState<MaintenanceItem[]>([])
+  const [enhancedMaintenanceItems, setEnhancedMaintenanceItems] = useState<MaintenanceItemWithStatus[]>([])
   const [dataLoading, setDataLoading] = useState(true)
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [filterType, setFilterType] = useState<string>("all")
@@ -35,10 +89,56 @@ export function ServiceHistory() {
 
   useEffect(() => {
     if (selectedVehicleId && !vehiclesLoading) {
+      loadDashboardData()
       loadServiceRecords()
       loadMaintenanceItems()
     }
   }, [selectedVehicleId, vehiclesLoading])
+
+  // Calculate maintenance status when data changes
+  useEffect(() => {
+    if (selectedVehicleId && maintenanceItems.length > 0 && serviceRecords.length >= 0) {
+      const selectedVehicle = vehicles.find(v => v._id === selectedVehicleId)
+      if (selectedVehicle) {
+        const currentMileage = selectedVehicle.current_mileage
+        const purchaseMileage = selectedVehicle.purchase_mileage || 0
+        
+        console.log('Calculating maintenance status locally:', {
+          currentMileage,
+          purchaseMileage,
+          maintenanceItemsCount: maintenanceItems.length,
+          serviceRecordsCount: serviceRecords.length
+        })
+        
+        const calculated = calculateMaintenanceStatus(
+          maintenanceItems,
+          serviceRecords,
+          currentMileage,
+          purchaseMileage
+        )
+        
+        setEnhancedMaintenanceItems(calculated)
+        console.log('Calculated maintenance status:', calculated.map(item => ({
+          name: item.name,
+          status: item.status,
+          interval: item.interval_km,
+          dueAt: item.due_at_mileage,
+          milesUntilDue: item.miles_until_due,
+          milesOverdue: item.miles_overdue
+        })))
+      }
+    }
+  }, [selectedVehicleId, maintenanceItems, serviceRecords, vehicles])
+
+  const loadDashboardData = async () => {
+    try {
+      const response = await api.getDashboard(selectedVehicleId)
+      setDashboardData(response)
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error)
+      // Don't show toast for dashboard data - other data can still work
+    }
+  }
 
   const loadServiceRecords = async () => {
     setDataLoading(true)
@@ -75,6 +175,7 @@ export function ServiceHistory() {
   
   const handleServiceComplete = () => {
     loadServiceRecords()
+    loadDashboardData()
     setShowServiceForm(false)
     addToast({
       variant: "success",
@@ -132,6 +233,7 @@ export function ServiceHistory() {
       }
 
       await loadServiceRecords()
+      await loadDashboardData()
       await loadVehicles() // Refresh vehicles data to update mileage display
       cancelEditing()
       addToast({
@@ -157,6 +259,7 @@ export function ServiceHistory() {
     try {
       await api.deleteService(recordId)
       await loadServiceRecords()
+      await loadDashboardData()
       addToast({
         variant: "success",
         title: "Record Deleted",
@@ -229,12 +332,172 @@ export function ServiceHistory() {
               </div>
 
               {selectedVehicle && (
-                <MaintenanceStatsGrid
-                  totalCost={totalCost}
-                  serviceCount={serviceRecords.length}
-                  filteredRecordsCount={filteredRecords.length}
-                  maintenanceItemsCount={maintenanceItems.length}
-                />
+                <>
+                  <MaintenanceStatsGrid
+                    totalCost={totalCost}
+                    serviceCount={serviceRecords.length}
+                    filteredRecordsCount={filteredRecords.length}
+                    maintenanceItemsCount={maintenanceItems.length}
+                  />
+                  
+                  {/* Maintenance Status Overview */}
+                  {(dashboardData || enhancedMaintenanceItems.length > 0) && (
+                    <div className="space-y-4">
+                      {/* Get maintenance data from dashboard or calculated fallback */}
+                      {(() => {
+                        const dueNowItems = dashboardData 
+                          ? dashboardData.maintenance.due_now 
+                          : enhancedMaintenanceItems.filter(item => item.status === 'due_now').map(item => ({
+                              maintenance_item: item,
+                              miles_overdue: item.miles_overdue,
+                              due_at_mileage: item.due_at_mileage
+                            }))
+                        
+                        const dueSoonItems = dashboardData
+                          ? dashboardData.maintenance.due_soon
+                          : enhancedMaintenanceItems.filter(item => item.status === 'due_soon').map(item => ({
+                              maintenance_item: item,
+                              miles_until_due: item.miles_until_due,
+                              due_at_mileage: item.due_at_mileage
+                            }))
+                        
+                        const upToDateItems = dashboardData
+                          ? dashboardData.maintenance.ok
+                          : enhancedMaintenanceItems.filter(item => item.status === 'up_to_date').map(item => ({
+                              maintenance_item: item,
+                              miles_until_due: item.miles_until_due
+                            }))
+
+                        return (
+                          <>
+                            {/* Due Now Section */}
+                            {dueNowItems.length > 0 && (
+                              <Card className="border-red-200 bg-red-50">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="flex items-center gap-2 text-red-800">
+                                    <AlertTriangle className="w-5 h-5" />
+                                    Requires Attention ({dueNowItems.length})
+                                  </CardTitle>
+                                  <CardDescription className="text-red-700">
+                                    These items are overdue and need immediate attention
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="space-y-2">
+                                    {dueNowItems.map((item, index) => (
+                                      <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-red-200">
+                                        <div>
+                                          <p className="font-medium text-red-900">{item.maintenance_item.name}</p>
+                                          <p className="text-sm text-red-700">
+                                            {item.miles_overdue} km overdue • Due at {item.due_at_mileage.toLocaleString()} km
+                                          </p>
+                                        </div>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          onClick={() => setShowServiceForm(true)}
+                                          className="text-red-700 border-red-300 hover:bg-red-50"
+                                        >
+                                          Log Service
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+
+                            {/* Due Soon Section */}
+                            {dueSoonItems.length > 0 && (
+                              <Card className="border-yellow-200 bg-yellow-50">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="flex items-center gap-2 text-yellow-800">
+                                    <Clock className="w-5 h-5" />
+                                    Due Soon ({dueSoonItems.length})
+                                  </CardTitle>
+                                  <CardDescription className="text-yellow-700">
+                                    These items will need service within the next 1,000 km
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="space-y-2">
+                                    {dueSoonItems.map((item, index) => (
+                                      <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-yellow-200">
+                                        <div>
+                                          <p className="font-medium text-yellow-900">{item.maintenance_item.name}</p>
+                                          <p className="text-sm text-yellow-700">
+                                            Due in {item.miles_until_due.toLocaleString()} km • Due at {item.due_at_mileage.toLocaleString()} km
+                                          </p>
+                                        </div>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          onClick={() => setShowServiceForm(true)}
+                                          className="text-yellow-700 border-yellow-300 hover:bg-yellow-50"
+                                        >
+                                          Log Service
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+
+                            {/* Up to Date Section */}
+                            {upToDateItems.length > 0 && (
+                              <Card className="border-green-200 bg-green-50">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="flex items-center gap-2 text-green-800">
+                                    <CheckCircle className="w-5 h-5" />
+                                    Up to Date ({upToDateItems.length})
+                                  </CardTitle>
+                                  <CardDescription className="text-green-700">
+                                    These items are in good condition and don't need immediate service
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="grid gap-2 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                                    {upToDateItems.slice(0, 6).map((item, index) => (
+                                      <div key={index} className="p-3 bg-white rounded-lg border border-green-200">
+                                        <p className="font-medium text-green-900">{item.maintenance_item.name}</p>
+                                        <p className="text-sm text-green-700">
+                                          Due in {item.miles_until_due.toLocaleString()} km
+                                        </p>
+                                      </div>
+                                    ))}
+                                    {upToDateItems.length > 6 && (
+                                      <div className="p-3 bg-white rounded-lg border border-green-200 text-center">
+                                        <p className="text-sm text-green-700">
+                                          +{upToDateItems.length - 6} more items
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+
+                            {/* No Maintenance Items */}
+                            {dueNowItems.length === 0 && dueSoonItems.length === 0 && upToDateItems.length === 0 && (
+                              <Card className="border-gray-200 bg-gray-50">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="flex items-center gap-2 text-gray-800">
+                                    <CheckCircle className="w-5 h-5" />
+                                    No Maintenance Items
+                                  </CardTitle>
+                                  <CardDescription className="text-gray-700">
+                                    No maintenance items have been set up for this vehicle yet.
+                                  </CardDescription>
+                                </CardHeader>
+                              </Card>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

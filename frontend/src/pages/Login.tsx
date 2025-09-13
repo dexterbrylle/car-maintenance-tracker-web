@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useError } from '@/contexts/ErrorContext';
 import { validateEmail, validatePassword } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ interface LoginProps {
 
 export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
   const { login, isLoading } = useAuth();
+  const { showError } = useError();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -108,41 +110,21 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
         
         setErrors(formattedErrors);
         
-        // If there's a general error message, show it as submit error
-        if (error.response.data.message) {
-          setSubmitError(error.response.data.message);
-        }
-      } else if (error.response?.data?.message) {
-        // API error message - make it user-friendly
-        const apiMessage = error.response.data.message;
-        let userFriendlyMessage = apiMessage;
-        
-        // Transform technical messages to user-friendly ones
-        if (apiMessage.includes('Invalid email or password')) {
-          userFriendlyMessage = 'Invalid email or password. Please check your credentials and try again.';
-        } else if (apiMessage.includes('Unable to process your login')) {
-          userFriendlyMessage = 'Unable to process your login request. Please try again later.';
-        } else if (apiMessage.includes('Invalid request format')) {
-          userFriendlyMessage = 'Invalid request format. Please refresh the page and try again.';
-        }
-        
-        setSubmitError(userFriendlyMessage);
-      } else if (error.message) {
-        // Network or other error
-        let networkErrorMessage = error.message;
-        
-        // Transform network errors to user-friendly messages
-        if (error.message.includes('Network Error')) {
-          networkErrorMessage = 'Network error. Please check your internet connection and try again.';
-        } else if (error.message.includes('timeout')) {
-          networkErrorMessage = 'Request timeout. Please try again.';
-        } else if (error.message.includes('Invalid response format from server')) {
-          networkErrorMessage = 'Server response error. Please try again later.';
-        }
-        
-        setSubmitError(networkErrorMessage);
+        // Show toast for general validation errors
+        showError(error, {
+          title: 'Validation Error',
+          description: 'Please check your input and try again.',
+          variant: 'warning',
+          errorKey: 'login_validation_error'
+        });
       } else {
-        setSubmitError('An unexpected error occurred. Please try again later.');
+        // Use ErrorContext for all other errors
+        // The AuthContext will already show a toast, but we can add additional context here
+        showError(error, {
+          title: 'Login Failed',
+          description: 'Unable to login. Please check your credentials and try again.',
+          errorKey: 'login_failed_error'
+        });
       }
     }
   };

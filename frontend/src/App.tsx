@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { ErrorProvider } from './contexts/ErrorContext'
 import { ProtectedRoute, useFeatureAccess } from './components/auth/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 // Lazy load components for better performance
 const LazyVehicles = React.lazy(() => import('./pages/Vehicles').then(module => ({ default: module.Vehicles })))
@@ -169,15 +170,16 @@ function App() {
   return (
     <ToastProvider>
       <ErrorProvider>
-        <AuthProvider>
-          <Router future={{
-            v7_startTransition: true,
-            v7_relativeSplatPath: true
-          }}>
-            <div className="min-h-screen bg-background">
-              <Navigation />
-              <main className="pb-20 md:pb-0">
-              <Routes>
+        <ErrorBoundary>
+          <AuthProvider>
+            <Router future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true
+            }}>
+              <div className="min-h-screen bg-background">
+                <Navigation />
+                <main className="pb-20 md:pb-0">
+                <Routes>
                 {/* Public Routes (Authentication) */}
                 <Route path="/login" element={
                   <PublicRoute>
@@ -279,15 +281,16 @@ function App() {
                 
                 {/* Fallback route */}
                 <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </main>
-            <ToastContainer />
+                </Routes>
+              </main>
+              <ToastContainer />
 
-            {/* Mobile Navigation */}
-            <MobileNavigation />
-          </div>
-          </Router>
-        </AuthProvider>
+              {/* Mobile Navigation */}
+              <MobileNavigation />
+            </div>
+            </Router>
+          </AuthProvider>
+        </ErrorBoundary>
       </ErrorProvider>
     </ToastProvider>
   )
