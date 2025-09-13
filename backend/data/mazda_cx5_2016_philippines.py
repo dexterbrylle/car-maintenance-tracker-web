@@ -14,7 +14,7 @@ MAZDA_CX5_2016_PHILIPPINES_SCHEDULE = [
     {
         "name": "Drive Belts",
         "category": "Engine",
-        "interval_km": 48000,
+        "interval_km": 56000,
         "description": "Inspect drive belts for wear and tension",
         "action": "Inspect"
     },
@@ -39,14 +39,14 @@ MAZDA_CX5_2016_PHILIPPINES_SCHEDULE = [
     {
         "name": "Air Filter",
         "category": "Fuel System",
-        "interval_km": 24000,  # Severe conditions: replace at 24,000km
-        "description": "Replace air filter (severe driving conditions)",
+        "interval_km": 40000,  # Replace at 40,000km per owner's manual
+        "description": "Replace air filter",
         "action": "Replace"
     },
     {
         "name": "Fuel Lines and Hoses",
         "category": "Fuel System",
-        "interval_km": 32000,
+        "interval_km": 40000,
         "description": "Inspect fuel lines and hoses for leaks or damage",
         "action": "Inspect"
     },
@@ -168,6 +168,20 @@ MAZDA_CX5_2016_PHILIPPINES_SCHEDULE = [
         "category": "Air Conditioner System",
         "interval_km": 40000,
         "description": "Replace cabin air filter (every 40,000km or 2 years)",
+        "action": "Replace"
+    },
+    {
+        "name": "Rear Differential Oil",
+        "category": "Chassis and Body",
+        "interval_km": 48000,
+        "description": "Replace rear differential oil (if operated under severe conditions: towing, dusty/wet conditions, extended idling, short trips <16km)",
+        "action": "Replace"
+    },
+    {
+        "name": "Transfer Oil",
+        "category": "Chassis and Body",
+        "interval_km": 48000,
+        "description": "Replace transfer oil if submerged in water",
         "action": "Replace"
     }
 ]

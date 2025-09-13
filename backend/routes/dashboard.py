@@ -90,16 +90,14 @@ def get_fuel_performance(vehicle_id):
         }
 
     except Exception as e:
-        print(f"Error getting fuel performance: {e}")
+        # Log error for fuel performance calculation
         return None
 
 @bp.route('/<vehicle_id>', methods=['GET'])
-# @token_required  # Temporarily disabled for testing
+@token_required
 @user_rate_limit(limit=100, window_seconds=60)
 def get_dashboard(vehicle_id):
     try:
-        # For testing purposes, use a hardcoded user_id
-        # user_id = "68c3db4227f1eb5ab8e28917"  # get_current_user_id()
         user_id = get_current_user_id()
 
         # Get vehicle information and verify ownership
@@ -116,11 +114,6 @@ def get_dashboard(vehicle_id):
         # Calculate maintenance status for each item
         current_mileage = vehicle.get('current_mileage', 0)
 
-        print(f"=== DEBUG: Vehicle {vehicle_id} ===")
-        print(f"Current mileage: {current_mileage}")
-        print(f"Total maintenance items: {len(maintenance_items)}")
-        print(f"Total service records: {len(service_records)}")
-
         due_now = []
         due_soon = []
         ok = []
@@ -129,8 +122,6 @@ def get_dashboard(vehicle_id):
             item_id_str = str(item['_id'])
             item_name = item.get('name', 'Unknown')
             interval_km = item.get('interval_km', 0)
-            
-            print(f"--- Processing: {item_name} (interval: {interval_km}km) ---")
             
             # Find the most recent service record for this maintenance item
             relevant_services = [
@@ -145,12 +136,10 @@ def get_dashboard(vehicle_id):
                 last_service = relevant_services[0]
                 last_service_mileage = last_service.get('mileage', 0)
                 last_service_date = last_service.get('date')
-                print(f"  Found {len(relevant_services)} service records, last at {last_service_mileage}km")
             else:
                 # Never serviced - determine status based on manufacturer's schedule
                 last_service_mileage = 0
                 last_service_date = None
-                print(f"  No service records, using manufacturer's schedule from 0km")
             
             # Calculate next due mileage based on manufacturer's schedule
             if interval_km > 0:
@@ -169,13 +158,11 @@ def get_dashboard(vehicle_id):
                         due_at_mileage = interval_km
             else:
                 due_at_mileage = current_mileage
-            print(f"  Due at mileage: {due_at_mileage}km")
-            
+
             # Determine status based on current mileage vs due mileage
             if current_mileage >= due_at_mileage:
                 # Due now (overdue)
                 miles_overdue = current_mileage - due_at_mileage
-                print(f"  Status: DUE NOW ({miles_overdue}km overdue)")
                 due_now.append({
                     'maintenance_item': serialize_maintenance_item(item.copy()),
                     'miles_overdue': miles_overdue,
@@ -186,7 +173,6 @@ def get_dashboard(vehicle_id):
             elif current_mileage >= (due_at_mileage - 1000):
                 # Due soon (within 1000 km)
                 miles_until_due = due_at_mileage - current_mileage
-                print(f"  Status: DUE SOON ({miles_until_due}km until due)")
                 due_soon.append({
                     'maintenance_item': serialize_maintenance_item(item.copy()),
                     'miles_until_due': miles_until_due,
@@ -197,7 +183,6 @@ def get_dashboard(vehicle_id):
             else:
                 # OK (up to date)
                 miles_until_due = due_at_mileage - current_mileage
-                print(f"  Status: OK ({miles_until_due}km until due)")
                 ok.append({
                     'maintenance_item': serialize_maintenance_item(item.copy()),
                     'miles_until_due': miles_until_due,
@@ -205,8 +190,6 @@ def get_dashboard(vehicle_id):
                     'last_service_mileage': last_service_mileage,
                     'due_at_mileage': due_at_mileage
                 })
-
-        print(f"=== Summary: {len(due_now)} due now, {len(due_soon)} due soon, {len(ok)} up to date ===")
 
         # Sort each category by priority (overdue items first, then soonest due)
         due_now.sort(key=lambda x: x['miles_overdue'], reverse=True)
@@ -260,17 +243,6 @@ def get_dashboard(vehicle_id):
                 objectids.append((path, str(obj)))
             return objectids
 
-        print("=== Checking for ObjectIds ===")
-        for name, component in components.items():
-            if component:
-                objectids = find_objectids(component)
-                if objectids:
-                    print(f"ObjectIds found in {name}:")
-                    for path, oid in objectids:
-                        print(f"  {path}: {oid}")
-                else:
-                    print(f"No ObjectIds in {name}")
-
         # Apply deep serialization to all components
         serialized_response = deep_serialize({
             'vehicle': vehicle,
@@ -287,13 +259,7 @@ def get_dashboard(vehicle_id):
 
     except Exception as e:
         import traceback
-        error_msg = f"Dashboard error: {str(e)}"
-        print(error_msg)
-        print(f"Traceback: {traceback.format_exc()}")
-        # Also write to a file for persistent logging
-        with open('dashboard_error.log', 'a') as f:
-            f.write(f"{datetime.now()}: {error_msg}\n")
-            f.write(f"Traceback: {traceback.format_exc()}\n")
+        # Log error for dashboard endpoint
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<vehicle_id>/insights', methods=['GET'])

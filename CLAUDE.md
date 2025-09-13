@@ -57,8 +57,13 @@ cd backend
 source .venv/bin/activate  # Activate virtual environment
 pip install -r requirements.txt  # Install dependencies
 python app.py                    # Start development server (http://localhost:5005)
-python test_simple.py            # Run simple tests
-python test_fuel_tracking.py      # Run fuel tracking tests
+
+# Run specific tests
+python test_simple.py            # Basic functionality tests
+python test_fuel_tracking.py      # Fuel tracking logic tests
+python test_auth_isolation.py     # Authentication and security tests
+python test_mazda_data.py         # Mazda data validation
+python test_maintenance_creation.py  # Maintenance creation tests
 ```
 
 ### Docker Development
@@ -73,9 +78,18 @@ docker-compose logs frontend # View frontend logs only
 ### Testing
 ```bash
 cd backend
-python test_simple.py            # Run basic functionality tests
-python test_fuel_tracking.py    # Run fuel calculation tests
-python test_calculations.py     # Run fuel calculation accuracy tests
+source .venv/bin/activate      # Activate virtual environment
+
+# Run individual test files
+python test_simple.py            # Basic functionality tests
+python test_fuel_tracking.py    # Fuel tracking logic tests
+python test_calculations.py     # Fuel calculation accuracy tests
+python test_auth_isolation.py   # Authentication and security tests
+python test_mazda_data.py       # Mazda maintenance data validation
+python test_maintenance_creation.py  # Maintenance item creation tests
+
+# Run all tests (if run_tests.py exists)
+python run_tests.py             # Comprehensive test suite
 ```
 
 ### API Documentation
@@ -122,13 +136,15 @@ python test_calculations.py     # Run fuel calculation accuracy tests
 
 ## Authentication System
 
-### Current Implementation (feature/authentication branch)
+### Current Implementation
 - **JWT Authentication**: Access tokens (15 min) and refresh tokens (7 days)
 - **User Management**: Registration, login, profile management, password reset
 - **Multi-tenant Architecture**: User isolation with user_id fields
+- **Subscription Tiers**: 'free', 'personal', 'family', 'business' levels
 - **Security Features**: Rate limiting, input validation, password hashing
 - **Session Management**: Refresh token rotation and revocation
-- **Email Verification**: Basic implementation (pending completion)
+- **User Isolation**: Database-level isolation with MongoDB indexes
+- **404 Security**: Returns 404 instead of 403 for unauthorized access to prevent user enumeration
 
 ### Authentication Endpoints
 - `POST /api/auth/register` - User registration
@@ -157,7 +173,6 @@ python test_calculations.py     # Run fuel calculation accuracy tests
     'password_hash': str,  # bcrypt
     'first_name': str,
     'last_name': str,
-    'phone': str,
     'subscription_tier': str,  # 'free', 'personal', 'family', 'business'
     'is_verified': bool,
     'created_at': datetime,
@@ -342,11 +357,17 @@ python test_calculations.py     # Run fuel calculation accuracy tests
 - `REDIS_URL`: Redis connection for rate limiting (optional)
 
 ### Docker Configuration
-- **Frontend**: Nginx serving static files
-- **Backend**: Gunicorn with Flask app
-- **Database**: MongoDB container
-- **Reverse Proxy**: Nginx routing
-- **Ports**: Backend (8242), Frontend (8241), MongoDB (27018)
+- **Frontend**: Nginx serving static files (port 80)
+- **Backend**: Flask production server (port 5000)
+- **Database**: MongoDB container (port 27017)
+- **Reverse Proxy**: Nginx routing API calls to backend
+- **Health Checks**: Backend health endpoint at `/health`
+- **Data Persistence**: MongoDB volumes for data persistence
+- **Environment**: Production configuration with security headers
+
+**Development vs Production Ports**:
+- Development: Frontend (3000), Backend (5005)
+- Production: Frontend (80), Backend (5000), API proxy through nginx
 
 ## Common Issues
 
@@ -354,13 +375,14 @@ python test_calculations.py     # Run fuel calculation accuracy tests
 - Frontend dev server runs on port 3000
 - Backend dev server runs on port 5005
 - CORS configured for both development and production
-- Docker uses different ports (8242 backend, 8241 frontend)
+- Docker uses different ports (80 frontend, 5000 backend)
 
 ### MongoDB Connection
 - Ensure MongoDB is running (Docker or local)
 - Check connection string in environment variables
 - Verify database permissions
-- Docker uses port 27018 for MongoDB
+- Docker uses port 27017 for MongoDB with container networking
+- Development can use local MongoDB or Docker container
 
 ### Build Issues
 - Clear node modules and reinstall: `rm -rf node_modules && pnpm install`
@@ -410,6 +432,8 @@ python test_calculations.py     # Run fuel calculation accuracy tests
 ├── docs/                 # Documentation
 │   ├── PRODUCTION_READINESS_ANALYSIS.md
 │   └── security_gaps.md
+├── backend/TESTING_STRATEGY.md  # Comprehensive testing strategy
+├── BACKEND_DOCUMENTATION.md    # Detailed backend documentation
 ├── docker-compose.yml    # Docker orchestration
 └── README.md            # Project documentation
 ```
@@ -438,12 +462,64 @@ python test_calculations.py     # Run fuel calculation accuracy tests
 - `test_simple.py` - Basic functionality tests
 - `test_fuel_tracking.py` - Fuel tracking logic tests
 - `test_calculations.py` - Fuel calculation accuracy tests
+- `test_auth_isolation.py` - Authentication and user isolation tests
+- `test_mazda_data.py` - Mazda maintenance schedule data validation
+- `test_maintenance_creation.py` - Maintenance item creation and interval verification
 - Tests use Python's built-in unittest framework
 
 ### Test Coverage
-- Authentication flow
+- Authentication flow and security measures
 - Fuel calculations and validation
 - Data model operations
 - API endpoint responses
 - Error handling scenarios
-- When working with @backend/ use the venv. Activate it with source .venv/bin/activate.
+- User isolation and multi-tenant architecture
+- Vehicle-specific maintenance schedules
+- Database security patterns
+
+### Testing Strategy
+The project follows a comprehensive testing strategy documented in `backend/TESTING_STRATEGY.md`:
+- **Unit Tests**: 80%+ coverage for core business logic
+- **Integration Tests**: Database operations and API interactions
+- **Security Tests**: Authentication, authorization, and input validation
+- **Performance Tests**: Calculation efficiency and query optimization
+- **Test Categories**: Unit, integration, functional, security, and performance tests
+- **Test Data Management**: Builders, fixtures, and isolation patterns
+
+**Important**: Always activate the virtual environment when working with backend:
+```bash
+cd backend
+source .venv/bin/activate
+```
+
+## Project Documentation
+
+The project includes comprehensive documentation:
+
+### Backend Documentation (`BACKEND_DOCUMENTATION.md`)
+- Complete system architecture and component overview
+- API endpoint documentation with examples
+- Security implementation details
+- Database schema and indexes
+- Performance optimization strategies
+- Production deployment recommendations
+
+### Testing Strategy (`backend/TESTING_STRATEGY.md`)
+- Comprehensive testing philosophy and framework
+- Test coverage analysis and goals
+- Test categories (unit, integration, security, performance)
+- Test data management and mocking strategies
+- CI/CD integration plans
+- Future testing improvements roadmap
+
+### Security Analysis
+- `docs/PRODUCTION_READINESS_ANALYSIS.md` - Production readiness assessment
+- `docs/security_gaps.md` - Security vulnerability analysis
+- Authentication and authorization patterns
+- Rate limiting and input validation
+- Multi-tenant security implementation
+
+### API Collection Files
+- `car-maintenance-tracker-api-postman.json` - Postman collection
+- `car-maintenance-tracker-api-insomnia.json` - Insomnia collection
+- Pre-configured API requests for testing and development
