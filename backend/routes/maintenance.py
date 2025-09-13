@@ -244,7 +244,7 @@ def get_simple_maintenance_items(vehicle_id):
                 'status': status,
                 'last_service_date': last_service_date,
                 'last_service_mileage': last_service_mileage,
-                'due_at_mileage': due_at_mileage,
+                'due_at_mileage': next_due_mileage,
                 'miles_until_due': miles_until_due,
                 'miles_overdue': miles_overdue,
                 'service_count': len(relevant_services)
