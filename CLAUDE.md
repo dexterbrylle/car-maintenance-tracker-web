@@ -4,7 +4,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Car Maintenance Tracker** - a full-stack web application for tracking vehicle maintenance schedules, service history, and fuel economy. Built with React frontend, Flask backend, and MongoDB. The application is currently implementing authentication and multi-tenant architecture on the `feature/authentication` branch.
+This is a **Car Maintenance Tracker** - a smart proactive maintenance system that acts like your personal mechanic. Built with React frontend, Flask backend, and MongoDB, the application transforms from simple record-keeping to intelligent maintenance management that helps users stay ahead of their vehicle's needs.
+
+### Smart Mechanic Philosophy
+
+**The system should essentially act like a smart mechanic who knows your vehicle's full history and can tell you exactly what needs attention and when.**
+
+Instead of just being a digital logbook, the system proactively:
+- **Identifies maintenance needs** before they become critical
+- **Provides realistic assessments** for used vehicles based on age and mileage
+- **Tracks mileage progression** automatically from service records and fill-ups
+- **Calculates maintenance timelines** based on actual vehicle usage patterns
+- **Alerts users** to upcoming service requirements and potential issues
+
+### Real-World Usage Pattern
+
+The system is designed for how people actually maintain vehicles:
+- Users add existing vehicles with known mileage and service history
+- The system assesses likely maintenance status based on vehicle age and current mileage
+- Users log services and fill-ups as they occur
+- The system automatically tracks mileage progression and updates maintenance status
+- Users receive proactive alerts about upcoming maintenance needs
+
+### Reactive vs Proactive Approach
+
+**Traditional (Reactive)**:
+- User only knows about maintenance when they think to check
+- System shows historical data but doesn't predict future needs
+- Used vehicles appear to have "all maintenance up to date" regardless of actual condition
+
+**Smart Mechanic (Proactive)**:
+- System immediately flags likely overdue maintenance when adding used vehicles
+- Shows maintenance timeline with upcoming service requirements
+- Automatically updates status based on actual usage patterns
+- Provides actionable insights and recommendations
 
 ## Development Commands
 
@@ -139,12 +172,18 @@ python test_calculations.py     # Run fuel calculation accuracy tests
     'make': str,
     'model': str,
     'year': int,
-    'current_mileage': int,
-    'purchase_mileage': int,
-    'user_id': ObjectId,  # Multi-tenant architecture
+    'initial_mileage': int,     # Mileage when user started tracking
+    'current_mileage': int,     # Latest known mileage (auto-updates)
+    'user_id': ObjectId,        # Multi-tenant architecture
     'created_at': datetime
 }
 ```
+
+**Dual Mileage Tracking System**:
+- **initial_mileage**: Mileage when user began tracking the vehicle (baseline)
+- **current_mileage**: Latest actual mileage, automatically updated from service records and fill-ups
+- **Auto-update Logic**: current_mileage = MAX(current_mileage, service_mileage, fillup_odometer)
+- **Validation**: Ensures current_mileage never decreases, only increases or stays same
 
 ### MaintenanceItem
 ```python

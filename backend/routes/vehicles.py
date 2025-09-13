@@ -65,6 +65,10 @@ def add_vehicle():
 
         # Add user_id to data
         data['user_id'] = user_id
+        
+        # Ensure current_mileage is provided
+        if 'current_mileage' not in data:
+            return jsonify({'error': 'Missing required field: current_mileage'}), 400
 
         # Validate input
         validation = validation_result(validate_vehicle_data(data))
@@ -97,10 +101,27 @@ def update_vehicle(vehicle_id):
 
         data = request.get_json()
 
-        # Validate input
-        validation = validation_result(validate_vehicle_data(data))
-        if not validation['valid']:
-            return jsonify({'error': 'Validation failed', 'details': validation['errors']}), 400
+        # Validate input - for partial updates, only validate provided fields
+        if 'make' in data or 'model' in data or 'year' in data:
+            # Full validation when updating core vehicle info
+            validation = validation_result(validate_vehicle_data(data))
+            if not validation['valid']:
+                return jsonify({'error': 'Validation failed', 'details': validation['errors']}), 400
+        else:
+            # Partial update validation (e.g., just mileage)
+            errors = []
+            if 'current_mileage' in data:
+                try:
+                    mileage = int(data['current_mileage'])
+                    if mileage < 0:
+                        errors.append('Current mileage must be a positive number')
+                    elif mileage > 10000000:  # Reasonable upper limit
+                        errors.append('Current mileage seems too high')
+                except (ValueError, TypeError):
+                    errors.append('Current mileage must be a valid number')
+
+            if errors:
+                return jsonify({'error': 'Validation failed', 'details': errors}), 400
 
         if Vehicle.update_vehicle(vehicle_id, data, user_id):
             return jsonify({'message': 'Vehicle updated successfully'}), 200
@@ -226,7 +247,7 @@ def export_vehicle_info(vehicle_id):
 
         # Get maintenance status summary
         current_mileage = vehicle.get('current_mileage', 0)
-        purchase_mileage = vehicle.get('purchase_mileage', 0)
+        # For manufacturer's schedule, we calculate from 0km
         overdue_items = 0
         due_soon_items = 0
 
@@ -241,7 +262,7 @@ def export_vehicle_info(vehicle_id):
             if relevant_services:
                 last_service_mileage = relevant_services[0].get('mileage', 0)
             else:
-                last_service_mileage = purchase_mileage
+                last_service_mileage = 0  # Manufacturer's schedule starts from 0km
 
             interval_km = item.get('interval_km', 0)
             next_due_mileage = last_service_mileage + interval_km
@@ -261,7 +282,7 @@ def export_vehicle_info(vehicle_id):
         writer.writerow(['Model', vehicle.get('model', '')])
         writer.writerow(['Year', vehicle.get('year', '')])
         writer.writerow(['Current Mileage', vehicle.get('current_mileage', '')])
-        writer.writerow(['Purchase Mileage', vehicle.get('purchase_mileage', '')])
+        # writer.writerow(['Purchase Mileage', vehicle.get('purchase_mileage', '')])
         writer.writerow(['Created Date', vehicle.get('created_at', '').replace('T', ' ').split('.')[0] if vehicle.get('created_at') else ''])
         writer.writerow([])
 

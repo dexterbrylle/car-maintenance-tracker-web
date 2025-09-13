@@ -6,7 +6,7 @@ export function MobileNavigation() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white lg:hidden pb-safe-bottom">
-      <div className="grid grid-cols-5">
+      <div className="grid grid-cols-4">
         {/* Dashboard */}
         <Link
           to="/"
@@ -38,14 +38,6 @@ export function MobileNavigation() {
           )}
           <span>Fuel</span>
         </Link>
-
-        {/* Spacer to maintain 5-column layout */}
-        <div className="flex flex-col items-center py-3">
-          <div className="mb-1 h-5 w-5" />
-          <span className="text-xs font-medium text-slate-300">
-            •
-          </span>
-        </div>
 
         {/* Maintenance */}
         <Link

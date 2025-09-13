@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { AuthContextType, User, AuthTokens, LoginCredentials, RegisterData, UpdatePasswordData, ForgotPasswordData, ResetPasswordData, SubscriptionTier, SubscriptionStatusInfo } from '@/types/auth';
 import { api } from '@/lib/api';
+import { useError } from '@/contexts/ErrorContext';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -25,6 +26,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [subscription, setSubscription] = useState<SubscriptionStatusInfo | null>(null);
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
+  const { 
+  showAuthError, 
+  showServerError, 
+  showFormSuccess, 
+  showLoginSuccess 
+} = useError();
 
   // Store tokens in localStorage
   const storeTokens = useCallback((newTokens: AuthTokens) => {
@@ -223,11 +230,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Fetch subscription info
         await fetchSubscriptionInfo();
+        
+        // Show success message
+        showLoginSuccess();
       } else {
         throw new Error(response.message || 'Login failed');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
+      showAuthError(error as Error | string);
       throw error;
     } finally {
       setIsLoading(false);
@@ -301,11 +312,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Fetch subscription info
         await fetchSubscriptionInfo();
+        
+        // Show success message
+        showFormSuccess('Account created');
       } else {
         throw new Error(response.message || 'Registration failed');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Registration error:', error);
+      showAuthError(error as Error | string);
       throw error;
     } finally {
       setIsLoading(false);
@@ -341,25 +356,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (response.success && response.data) {
         const updatedUser = { ...user, ...response.data };
         storeUserData(updatedUser);
+        showFormSuccess('Profile updated');
       } else {
         throw new Error(response.message || 'Profile update failed');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Profile update error:', error);
-      
-      // Transform error to user-friendly message
-      if (error instanceof Error) {
-        const errorMessage = error.message;
-        if (errorMessage.includes('Unable to update your profile')) {
-          throw new Error('Unable to update your profile. Please try again later.');
-        } else if (errorMessage.includes('User not found')) {
-          throw new Error('User account not found. Please log in again.');
-        } else if (errorMessage.includes('Profile update failed')) {
-          throw new Error('Failed to update profile. Please check your information and try again.');
-        }
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while updating your profile.');
+      showServerError(error as Error | string);
+      throw error;
     }
   }, [user, storeUserData]);
 

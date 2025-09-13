@@ -3,6 +3,7 @@ import { Vehicle, MaintenanceItem, ServiceRecord, DashboardData, FuelRecord, Fue
 import { cachedFetch, CACHE_KEYS, CACHE_EXPIRY, invalidateVehicleCache, cacheManager } from './cache';
 import { debounce } from './debounce';
 import { getAccessToken, refreshToken, getAuthHeader, storeTokens, handleApiError } from './auth';
+import { errorHandlers, showErrorToast } from './errorHandler';
 
 export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD 
   ? '/api'  // Production: proxy through nginx
@@ -82,28 +83,65 @@ axiosInstance.interceptors.response.use(
         } else {
           // Refresh failed, logout user
           localStorage.removeItem('car_maintenance_tracker_user_data');
+          errorHandlers.auth(new Error('Session expired. Please login again.'));
           window.location.href = '/login';
           return Promise.reject(new Error('Session expired. Please login again.'));
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
         localStorage.removeItem('car_maintenance_tracker_user_data');
+        errorHandlers.auth(new Error('Session expired. Please login again.'));
         window.location.href = '/login';
         return Promise.reject(new Error('Session expired. Please login again.'));
       }
     }
     
-    // Handle other errors
+    // Handle other errors with toast notifications
     if (error.code === 'ECONNABORTED') {
       console.error('Request timeout:', error.config?.url);
+      errorHandlers.network(new Error('Request timeout. Please try again.'));
       return Promise.reject(new Error('Request timeout. Please try again.'));
     }
     
     if (error.response?.status >= 500) {
       console.error('Server error:', error.response?.status);
+      errorHandlers.server(error);
       return Promise.reject(new Error('Server error. Please try again later.'));
     }
     
+    if (error.response?.status === 429) {
+      errorHandlers.rateLimit(error);
+      return Promise.reject(error);
+    }
+    
+    if (error.response?.status === 403) {
+      errorHandlers.permission(error);
+      return Promise.reject(error);
+    }
+    
+    if (error.response?.status === 404) {
+      errorHandlers.notFound(error);
+      return Promise.reject(error);
+    }
+    
+    if (error.response?.status === 400) {
+      // Handle validation errors
+      if (error.response?.data?.details) {
+        errorHandlers.validation(error);
+      } else {
+        errorHandlers.api(error);
+      }
+      return Promise.reject(error);
+    }
+    
+    // Handle network errors
+    if (error.message?.includes('Network Error')) {
+      errorHandlers.network(error);
+      return Promise.reject(error);
+    }
+    
+    // Generic API error
+    errorHandlers.api(error);
     return Promise.reject(error);
   }
 );

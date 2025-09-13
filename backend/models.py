@@ -32,12 +32,14 @@ class Vehicle:
         if not user_id:
             raise ValueError('Invalid user ID')
 
+        # Extract and validate mileage data
+        current_mileage = data.get('current_mileage', 0)
+
         vehicle_data = {
             'make': data.get('make'),
             'model': data.get('model'),
             'year': data.get('year'),
-            'current_mileage': data.get('current_mileage', 0),
-            'purchase_mileage': data.get('purchase_mileage', 0),
+            'current_mileage': current_mileage,
             'user_id': user_id,
             'created_at': datetime.utcnow()
         }
@@ -79,7 +81,19 @@ class Vehicle:
         if not vehicle_object_id:
             return False
 
-        update_data = {k: v for k, v in data.items() if k in ['make', 'model', 'year', 'current_mileage', 'purchase_mileage']}
+        # Get current vehicle to validate mileage updates
+        current_vehicle = db.vehicles.find_one({'_id': vehicle_object_id})
+        if not current_vehicle:
+            return False
+
+        # Extract and validate mileage data
+        update_data = {k: v for k, v in data.items() if k in ['make', 'model', 'year', 'current_mileage']}
+        
+        # Validate current_mileage is not decreasing
+        if 'current_mileage' in update_data:
+            current_vehicle_mileage = current_vehicle.get('current_mileage', 0)
+            if update_data['current_mileage'] < current_vehicle_mileage:
+                update_data['current_mileage'] = current_vehicle_mileage
         query = {'_id': vehicle_object_id}
         if user_id:
             user_object_id = Vehicle._safe_object_id(user_id)
@@ -111,6 +125,37 @@ class Vehicle:
 
         result = db.vehicles.delete_one(query)
         return result.deleted_count > 0
+
+    @staticmethod
+    def update_current_mileage(vehicle_id, new_mileage):
+        """Update current_mileage if new_mileage is higher"""
+        vehicle_object_id = Vehicle._safe_object_id(vehicle_id)
+        if not vehicle_object_id:
+            return False
+
+        current_vehicle = db.vehicles.find_one({'_id': vehicle_object_id})
+        if not current_vehicle:
+            return False
+
+        current_mileage = current_vehicle.get('current_mileage', 0)
+        if new_mileage > current_mileage:
+            result = db.vehicles.update_one(
+                {'_id': vehicle_object_id},
+                {'$set': {'current_mileage': new_mileage}}
+            )
+            return result.modified_count > 0
+        
+        return False
+
+    @staticmethod
+    def update_mileage_from_service(vehicle_id, service_mileage):
+        """Update current_mileage from service record"""
+        return Vehicle.update_current_mileage(vehicle_id, service_mileage)
+
+    @staticmethod
+    def update_mileage_from_fillup(vehicle_id, fillup_odometer):
+        """Update current_mileage from fill-up record"""
+        return Vehicle.update_current_mileage(vehicle_id, fillup_odometer)
 
 class MaintenanceItem:
     @staticmethod

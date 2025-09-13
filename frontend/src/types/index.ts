@@ -6,7 +6,6 @@ export interface Vehicle {
   model: string;
   year: number;
   current_mileage: number;
-  purchase_mileage: number;
   created_at: string;
 }
 

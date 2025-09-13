@@ -115,15 +115,24 @@ def get_dashboard(vehicle_id):
 
         # Calculate maintenance status for each item
         current_mileage = vehicle.get('current_mileage', 0)
-        purchase_mileage = vehicle.get('purchase_mileage', 0)
+
+        print(f"=== DEBUG: Vehicle {vehicle_id} ===")
+        print(f"Current mileage: {current_mileage}")
+        print(f"Total maintenance items: {len(maintenance_items)}")
+        print(f"Total service records: {len(service_records)}")
 
         due_now = []
         due_soon = []
         ok = []
 
         for item in maintenance_items:
-            # Find the most recent service record for this maintenance item
             item_id_str = str(item['_id'])
+            item_name = item.get('name', 'Unknown')
+            interval_km = item.get('interval_km', 0)
+            
+            print(f"--- Processing: {item_name} (interval: {interval_km}km) ---")
+            
+            # Find the most recent service record for this maintenance item
             relevant_services = [
                 s for s in service_records
                 if str(s.get('maintenance_item_id')) == item_id_str
@@ -136,19 +145,37 @@ def get_dashboard(vehicle_id):
                 last_service = relevant_services[0]
                 last_service_mileage = last_service.get('mileage', 0)
                 last_service_date = last_service.get('date')
+                print(f"  Found {len(relevant_services)} service records, last at {last_service_mileage}km")
             else:
-                # Never serviced - use purchase mileage as baseline
-                last_service_mileage = purchase_mileage
+                # Never serviced - determine status based on manufacturer's schedule
+                last_service_mileage = 0
                 last_service_date = None
-
-            # Calculate when this item is due
-            interval_km = item.get('interval_km', 0)
-            due_at_mileage = last_service_mileage + interval_km
-
-            # Determine status
+                print(f"  No service records, using manufacturer's schedule from 0km")
+            
+            # Calculate next due mileage based on manufacturer's schedule
+            if interval_km > 0:
+                # Calculate which service interval we should be at
+                next_interval = ((current_mileage // interval_km) + 1) * interval_km
+                last_expected_service = (current_mileage // interval_km) * interval_km
+                
+                # If we have service records, use the actual last service
+                if relevant_services:
+                    due_at_mileage = last_service_mileage + interval_km
+                else:
+                    # No service records - determine if current maintenance is overdue
+                    if current_mileage >= interval_km:
+                        due_at_mileage = last_expected_service
+                    else:
+                        due_at_mileage = interval_km
+            else:
+                due_at_mileage = current_mileage
+            print(f"  Due at mileage: {due_at_mileage}km")
+            
+            # Determine status based on current mileage vs due mileage
             if current_mileage >= due_at_mileage:
-                # Due now
+                # Due now (overdue)
                 miles_overdue = current_mileage - due_at_mileage
+                print(f"  Status: DUE NOW ({miles_overdue}km overdue)")
                 due_now.append({
                     'maintenance_item': serialize_maintenance_item(item.copy()),
                     'miles_overdue': miles_overdue,
@@ -159,6 +186,7 @@ def get_dashboard(vehicle_id):
             elif current_mileage >= (due_at_mileage - 1000):
                 # Due soon (within 1000 km)
                 miles_until_due = due_at_mileage - current_mileage
+                print(f"  Status: DUE SOON ({miles_until_due}km until due)")
                 due_soon.append({
                     'maintenance_item': serialize_maintenance_item(item.copy()),
                     'miles_until_due': miles_until_due,
@@ -167,8 +195,9 @@ def get_dashboard(vehicle_id):
                     'due_at_mileage': due_at_mileage
                 })
             else:
-                # OK
+                # OK (up to date)
                 miles_until_due = due_at_mileage - current_mileage
+                print(f"  Status: OK ({miles_until_due}km until due)")
                 ok.append({
                     'maintenance_item': serialize_maintenance_item(item.copy()),
                     'miles_until_due': miles_until_due,
@@ -176,6 +205,8 @@ def get_dashboard(vehicle_id):
                     'last_service_mileage': last_service_mileage,
                     'due_at_mileage': due_at_mileage
                 })
+
+        print(f"=== Summary: {len(due_now)} due now, {len(due_soon)} due soon, {len(ok)} up to date ===")
 
         # Sort each category by priority (overdue items first, then soonest due)
         due_now.sort(key=lambda x: x['miles_overdue'], reverse=True)

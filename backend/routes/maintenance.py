@@ -36,7 +36,7 @@ def get_maintenance_schedule(vehicle_id):
         service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
         
         current_mileage = vehicle.get('current_mileage', 0)
-        purchase_mileage = vehicle.get('purchase_mileage', 0)
+        initial_mileage = vehicle.get('initial_mileage', 0)
         
         # Enhanced maintenance schedule with service status
         enhanced_schedule = []
@@ -57,7 +57,7 @@ def get_maintenance_schedule(vehicle_id):
                 last_service_mileage = last_service.get('mileage', 0)
                 last_service_date = last_service.get('date')
             else:
-                last_service_mileage = purchase_mileage
+                last_service_mileage = initial_mileage
                 last_service_date = None
             
             interval_km = item.get('interval_km', 0)
@@ -153,7 +153,7 @@ def add_maintenance_item():
 @token_required
 @user_rate_limit(limit=100, window_seconds=60)
 def get_simple_maintenance_items(vehicle_id):
-    """Get simple maintenance items list for dashboard compatibility"""
+    """Get maintenance items with status evaluation for frontend use"""
     try:
         user_id = get_current_user_id()
         
@@ -162,11 +162,101 @@ def get_simple_maintenance_items(vehicle_id):
         if not vehicle:
             return jsonify({'error': 'Vehicle not found'}), 404
         
+        # Get maintenance items and service records
         maintenance_items = MaintenanceItem.get_maintenance_items_by_vehicle(vehicle_id)
-        # Serialize each maintenance item to handle ObjectId and datetime
-        serialized_items = [serialize_maintenance_item(item) for item in maintenance_items]
-        return jsonify(serialized_items), 200
+        service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
+        
+        current_mileage = vehicle.get('current_mileage', 0)
+        
+        print(f"=== DEBUG: Simple Maintenance API for Vehicle {vehicle_id} ===")
+        print(f"Current mileage: {current_mileage}")
+        print(f"Total maintenance items: {len(maintenance_items)}")
+        
+        enhanced_items = []
+        
+        for item in maintenance_items:
+            item_id_str = str(item['_id'])
+            item_name = item.get('name', 'Unknown')
+            interval_km = item.get('interval_km', 0)
+            
+            print(f"--- Processing: {item_name} (interval: {interval_km}km) ---")
+            
+            # Find the most recent service record for this maintenance item
+            relevant_services = [
+                s for s in service_records 
+                if str(s.get('maintenance_item_id')) == item_id_str
+            ]
+            relevant_services.sort(key=lambda x: x.get('mileage', 0), reverse=True)
+            
+            # Calculate status
+            if relevant_services:
+                last_service = relevant_services[0]
+                last_service_mileage = last_service.get('mileage', 0)
+                last_service_date = last_service.get('date')
+                print(f"  Found {len(relevant_services)} service records, last at {last_service_mileage}km")
+            else:
+                # Never serviced - determine status based on manufacturer's schedule
+                last_service_mileage = 0
+                last_service_date = None
+                print(f"  No service records, using manufacturer's schedule from 0km")
+            
+            # Calculate next due mileage based on manufacturer's schedule
+            # Find the next multiple of interval_km that should have been completed
+            if interval_km > 0:
+                # Calculate which service interval we should be at
+                next_interval = ((current_mileage // interval_km) + 1) * interval_km
+                last_expected_service = (current_mileage // interval_km) * interval_km
+                
+                # If we have service records, use the actual last service
+                if relevant_services:
+                    next_due_mileage = last_service_mileage + interval_km
+                else:
+                    # No service records - determine if current maintenance is overdue
+                    if current_mileage >= interval_km:
+                        next_due_mileage = last_expected_service
+                    else:
+                        next_due_mileage = interval_km
+            else:
+                next_due_mileage = current_mileage
+            
+            print(f"  Next due at mileage: {next_due_mileage}km")
+            
+            # Determine status based on manufacturer's schedule
+            if current_mileage >= next_due_mileage:
+                status = 'due_now'
+                miles_overdue = current_mileage - next_due_mileage
+                miles_until_due = 0
+                print(f"  Status: DUE NOW ({miles_overdue}km overdue)")
+            elif current_mileage >= (next_due_mileage - 1000):
+                status = 'due_soon'
+                miles_until_due = next_due_mileage - current_mileage
+                miles_overdue = 0
+                print(f"  Status: DUE SOON ({miles_until_due}km until due)")
+            else:
+                status = 'up_to_date'
+                miles_until_due = next_due_mileage - current_mileage
+                miles_overdue = 0
+                print(f"  Status: UP TO DATE ({miles_until_due}km until due)")
+            
+            # Create enhanced item with status information
+            enhanced_item = serialize_maintenance_item(item.copy())
+            enhanced_item.update({
+                'status': status,
+                'last_service_date': last_service_date,
+                'last_service_mileage': last_service_mileage,
+                'due_at_mileage': next_due_mileage,
+                'miles_until_due': miles_until_due,
+                'miles_overdue': miles_overdue,
+                'service_count': len(relevant_services)
+            })
+            
+            enhanced_items.append(enhanced_item)
+        
+        print(f"=== Summary: {len([i for i in enhanced_items if i['status'] == 'due_now'])} due now, {len([i for i in enhanced_items if i['status'] == 'due_soon'])} due soon, {len([i for i in enhanced_items if i['status'] == 'up_to_date'])} up to date ===")
+        
+        return jsonify(enhanced_items), 200
     except Exception as e:
+        print(f"Error in get_simple_maintenance_items: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/export/<vehicle_id>', methods=['GET'])
@@ -187,7 +277,7 @@ def export_maintenance_schedule(vehicle_id):
         service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
         
         current_mileage = vehicle.get('current_mileage', 0)
-        purchase_mileage = vehicle.get('purchase_mileage', 0)
+        initial_mileage = vehicle.get('initial_mileage', 0)
         
         # Create CSV content
         output = io.StringIO()
@@ -217,7 +307,7 @@ def export_maintenance_schedule(vehicle_id):
                 last_service_mileage = last_service.get('mileage', 0)
                 last_service_date = last_service.get('date')
             else:
-                last_service_mileage = purchase_mileage
+                last_service_mileage = initial_mileage
                 last_service_date = None
             
             interval_km = item.get('interval_km', 0)
