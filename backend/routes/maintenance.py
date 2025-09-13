@@ -166,11 +166,8 @@ def get_simple_maintenance_items(vehicle_id):
         maintenance_items = MaintenanceItem.get_maintenance_items_by_vehicle(vehicle_id)
         service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
         
+        # Calculate status for each item
         current_mileage = vehicle.get('current_mileage', 0)
-        
-        print(f"=== DEBUG: Simple Maintenance API for Vehicle {vehicle_id} ===")
-        print(f"Current mileage: {current_mileage}")
-        print(f"Total maintenance items: {len(maintenance_items)}")
         
         enhanced_items = []
         
@@ -178,8 +175,6 @@ def get_simple_maintenance_items(vehicle_id):
             item_id_str = str(item['_id'])
             item_name = item.get('name', 'Unknown')
             interval_km = item.get('interval_km', 0)
-            
-            print(f"--- Processing: {item_name} (interval: {interval_km}km) ---")
             
             # Find the most recent service record for this maintenance item
             relevant_services = [
@@ -193,12 +188,12 @@ def get_simple_maintenance_items(vehicle_id):
                 last_service = relevant_services[0]
                 last_service_mileage = last_service.get('mileage', 0)
                 last_service_date = last_service.get('date')
-                print(f"  Found {len(relevant_services)} service records, last at {last_service_mileage}km")
+                # Found service records
             else:
                 # Never serviced - determine status based on manufacturer's schedule
                 last_service_mileage = 0
                 last_service_date = None
-                print(f"  No service records, using manufacturer's schedule from 0km")
+                # No service records - using manufacturer's schedule from 0km
             
             # Calculate next due mileage based on manufacturer's schedule
             # Find the next multiple of interval_km that should have been completed
@@ -219,24 +214,24 @@ def get_simple_maintenance_items(vehicle_id):
             else:
                 next_due_mileage = current_mileage
             
-            print(f"  Next due at mileage: {next_due_mileage}km")
+            # Calculate status based on current mileage vs due mileage
             
             # Determine status based on manufacturer's schedule
             if current_mileage >= next_due_mileage:
                 status = 'due_now'
                 miles_overdue = current_mileage - next_due_mileage
                 miles_until_due = 0
-                print(f"  Status: DUE NOW ({miles_overdue}km overdue)")
+                # Due now (overdue)
             elif current_mileage >= (next_due_mileage - 1000):
                 status = 'due_soon'
                 miles_until_due = next_due_mileage - current_mileage
                 miles_overdue = 0
-                print(f"  Status: DUE SOON ({miles_until_due}km until due)")
+                # Due soon (within 1000 km)
             else:
                 status = 'up_to_date'
                 miles_until_due = next_due_mileage - current_mileage
                 miles_overdue = 0
-                print(f"  Status: UP TO DATE ({miles_until_due}km until due)")
+                # OK (up to date)
             
             # Create enhanced item with status information
             enhanced_item = serialize_maintenance_item(item.copy())
@@ -252,11 +247,11 @@ def get_simple_maintenance_items(vehicle_id):
             
             enhanced_items.append(enhanced_item)
         
-        print(f"=== Summary: {len([i for i in enhanced_items if i['status'] == 'due_now'])} due now, {len([i for i in enhanced_items if i['status'] == 'due_soon'])} due soon, {len([i for i in enhanced_items if i['status'] == 'up_to_date'])} up to date ===")
+        # Sort items by priority (overdue first, then soonest due)
         
         return jsonify(enhanced_items), 200
     except Exception as e:
-        print(f"Error in get_simple_maintenance_items: {str(e)}")
+        # Log error for maintenance items endpoint
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/export/<vehicle_id>', methods=['GET'])
