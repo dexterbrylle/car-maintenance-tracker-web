@@ -198,21 +198,21 @@ def validate_vehicle_data(data):
         except (ValueError, TypeError):
             errors.append('Current mileage must be a valid number')
     
-    # Validate purchase mileage
-    if 'purchase_mileage' in data and data['purchase_mileage']:
+    # Validate initial mileage
+    if 'initial_mileage' in data and data['initial_mileage']:
         try:
-            purchase_mileage = float(data['purchase_mileage'])
-            if purchase_mileage < 0:
-                errors.append('Purchase mileage cannot be negative')
-            elif purchase_mileage > 10000000:
-                errors.append('Purchase mileage seems too high')
+            initial_mileage = float(data['initial_mileage'])
+            if initial_mileage < 0:
+                errors.append('Initial mileage cannot be negative')
+            elif initial_mileage > 10000000:
+                errors.append('Initial mileage seems too high')
             
-            # Check if purchase mileage is greater than current mileage
+            # Check if initial mileage is greater than current mileage
             current_mileage = float(data.get('current_mileage', 0))
-            if purchase_mileage > current_mileage:
-                errors.append('Purchase mileage cannot be greater than current mileage')
+            if initial_mileage > current_mileage:
+                errors.append('Initial mileage cannot be greater than current mileage')
         except (ValueError, TypeError):
-            errors.append('Purchase mileage must be a valid number')
+            errors.append('Initial mileage must be a valid number')
     
     return errors
 

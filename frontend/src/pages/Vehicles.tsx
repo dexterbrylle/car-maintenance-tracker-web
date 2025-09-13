@@ -17,8 +17,7 @@ export function Vehicles() {
     make: "",
     model: "",
     year: new Date().getFullYear(),
-    current_mileage: "",
-    purchase_mileage: ""
+    current_mileage: ""
   })
 
   useEffect(() => {
@@ -42,8 +41,7 @@ export function Vehicles() {
     try {
       const data = {
         ...formData,
-        current_mileage: parseInt(formData.current_mileage),
-        purchase_mileage: parseInt(formData.purchase_mileage) || 0
+        current_mileage: parseInt(formData.current_mileage)
       }
 
       if (editingVehicle) {
@@ -80,8 +78,7 @@ export function Vehicles() {
       make: vehicle.make,
       model: vehicle.model,
       year: vehicle.year,
-      current_mileage: vehicle.current_mileage.toString(),
-      purchase_mileage: vehicle.purchase_mileage.toString()
+      current_mileage: vehicle.current_mileage.toString()
     })
     setShowAddForm(true)
   }
@@ -103,8 +100,7 @@ export function Vehicles() {
       make: "",
       model: "",
       year: new Date().getFullYear(),
-      current_mileage: "",
-      purchase_mileage: ""
+      current_mileage: ""
     })
     setEditingVehicle(null)
     setShowAddForm(false)
@@ -179,21 +175,11 @@ export function Vehicles() {
                         type="number"
                         value={formData.current_mileage}
                         onChange={(e) => setFormData(prev => ({ ...prev, current_mileage: e.target.value }))}
-                        placeholder="e.g., 50000"
+                        placeholder="e.g., 180000"
                         required
                       />
+                      <p className="text-sm text-muted-foreground">Your vehicle's current odometer reading</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="purchaseMileage">Purchase Mileage (km)</Label>
-                      <Input
-                        id="purchaseMileage"
-                        type="number"
-                        value={formData.purchase_mileage}
-                        onChange={(e) => setFormData(prev => ({ ...prev, purchase_mileage: e.target.value }))}
-                        placeholder="e.g., 45000"
-                      />
-                    </div>
-                  </div>
                   <div className="flex gap-2">
                     <Button type="submit">
                       {editingVehicle ? "Update Vehicle" : "Add Vehicle"}

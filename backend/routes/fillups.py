@@ -44,6 +44,12 @@ def add_fillup():
         # Create the fill-up record
         fillup_id = FillUp.create_fillup(data)
         
+        # Update vehicle mileage if fill-up odometer is higher
+        odometer_km = int(data['odometer_km'])
+        current_mileage = vehicle.get('current_mileage', 0)
+        if odometer_km > current_mileage:
+            Vehicle.update_mileage_from_fillup(data['vehicle_id'], odometer_km)
+        
         # Get the created record with calculated fields
         created_fillup = FillUp.get_fillup_by_id(fillup_id)
         

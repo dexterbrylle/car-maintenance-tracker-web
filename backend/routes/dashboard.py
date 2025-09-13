@@ -115,11 +115,9 @@ def get_dashboard(vehicle_id):
 
         # Calculate maintenance status for each item
         current_mileage = vehicle.get('current_mileage', 0)
-        purchase_mileage = vehicle.get('purchase_mileage', 0)
 
         print(f"=== DEBUG: Vehicle {vehicle_id} ===")
         print(f"Current mileage: {current_mileage}")
-        print(f"Purchase mileage: {purchase_mileage}")
         print(f"Total maintenance items: {len(maintenance_items)}")
         print(f"Total service records: {len(service_records)}")
 
@@ -149,13 +147,28 @@ def get_dashboard(vehicle_id):
                 last_service_date = last_service.get('date')
                 print(f"  Found {len(relevant_services)} service records, last at {last_service_mileage}km")
             else:
-                # Never serviced - use purchase mileage as baseline
-                last_service_mileage = purchase_mileage
+                # Never serviced - determine status based on manufacturer's schedule
+                last_service_mileage = 0
                 last_service_date = None
-                print(f"  No service records, using purchase mileage: {last_service_mileage}km")
-
-            # Calculate when this item is due
-            due_at_mileage = last_service_mileage + interval_km
+                print(f"  No service records, using manufacturer's schedule from 0km")
+            
+            # Calculate next due mileage based on manufacturer's schedule
+            if interval_km > 0:
+                # Calculate which service interval we should be at
+                next_interval = ((current_mileage // interval_km) + 1) * interval_km
+                last_expected_service = (current_mileage // interval_km) * interval_km
+                
+                # If we have service records, use the actual last service
+                if relevant_services:
+                    due_at_mileage = last_service_mileage + interval_km
+                else:
+                    # No service records - determine if current maintenance is overdue
+                    if current_mileage >= interval_km:
+                        due_at_mileage = last_expected_service
+                    else:
+                        due_at_mileage = interval_km
+            else:
+                due_at_mileage = current_mileage
             print(f"  Due at mileage: {due_at_mileage}km")
             
             # Determine status based on current mileage vs due mileage

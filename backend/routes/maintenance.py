@@ -36,7 +36,7 @@ def get_maintenance_schedule(vehicle_id):
         service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
         
         current_mileage = vehicle.get('current_mileage', 0)
-        purchase_mileage = vehicle.get('purchase_mileage', 0)
+        initial_mileage = vehicle.get('initial_mileage', 0)
         
         # Enhanced maintenance schedule with service status
         enhanced_schedule = []
@@ -57,7 +57,7 @@ def get_maintenance_schedule(vehicle_id):
                 last_service_mileage = last_service.get('mileage', 0)
                 last_service_date = last_service.get('date')
             else:
-                last_service_mileage = purchase_mileage
+                last_service_mileage = initial_mileage
                 last_service_date = None
             
             interval_km = item.get('interval_km', 0)
@@ -167,11 +167,9 @@ def get_simple_maintenance_items(vehicle_id):
         service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
         
         current_mileage = vehicle.get('current_mileage', 0)
-        purchase_mileage = vehicle.get('purchase_mileage', 0)
         
         print(f"=== DEBUG: Simple Maintenance API for Vehicle {vehicle_id} ===")
         print(f"Current mileage: {current_mileage}")
-        print(f"Purchase mileage: {purchase_mileage}")
         print(f"Total maintenance items: {len(maintenance_items)}")
         
         enhanced_items = []
@@ -197,29 +195,47 @@ def get_simple_maintenance_items(vehicle_id):
                 last_service_date = last_service.get('date')
                 print(f"  Found {len(relevant_services)} service records, last at {last_service_mileage}km")
             else:
-                last_service_mileage = purchase_mileage
+                # Never serviced - determine status based on manufacturer's schedule
+                last_service_mileage = 0
                 last_service_date = None
-                print(f"  No service records, using purchase mileage: {last_service_mileage}km")
+                print(f"  No service records, using manufacturer's schedule from 0km")
             
-            # Calculate due mileage
-            due_at_mileage = last_service_mileage + interval_km
-            print(f"  Due at mileage: {due_at_mileage}km")
+            # Calculate next due mileage based on manufacturer's schedule
+            # Find the next multiple of interval_km that should have been completed
+            if interval_km > 0:
+                # Calculate which service interval we should be at
+                next_interval = ((current_mileage // interval_km) + 1) * interval_km
+                last_expected_service = (current_mileage // interval_km) * interval_km
+                
+                # If we have service records, use the actual last service
+                if relevant_services:
+                    next_due_mileage = last_service_mileage + interval_km
+                else:
+                    # No service records - determine if current maintenance is overdue
+                    if current_mileage >= interval_km:
+                        next_due_mileage = last_expected_service
+                    else:
+                        next_due_mileage = interval_km
+            else:
+                next_due_mileage = current_mileage
             
-            # Determine status based on current mileage
-            if current_mileage >= due_at_mileage:
+            print(f"  Next due at mileage: {next_due_mileage}km")
+            
+            # Determine status based on manufacturer's schedule
+            if current_mileage >= next_due_mileage:
                 status = 'due_now'
-                miles_overdue = current_mileage - due_at_mileage
-                miles_until_due = 0  # Not applicable for overdue items
+                miles_overdue = current_mileage - next_due_mileage
+                miles_until_due = 0
                 print(f"  Status: DUE NOW ({miles_overdue}km overdue)")
-            elif current_mileage >= (due_at_mileage - 1000):
+            elif current_mileage >= (next_due_mileage - 1000):
                 status = 'due_soon'
-                miles_until_due = due_at_mileage - current_mileage
-                miles_overdue = 0  # Not applicable for due soon items
+                miles_until_due = next_due_mileage - current_mileage
+                miles_overdue = 0
                 print(f"  Status: DUE SOON ({miles_until_due}km until due)")
             else:
                 status = 'up_to_date'
-                miles_until_due = due_at_mileage - current_mileage
-                miles_overdue = 0  # Not applicable for up to date items
+                miles_until_due = next_due_mileage - current_mileage
+                miles_overdue = 0
                 print(f"  Status: UP TO DATE ({miles_until_due}km until due)")
             
             # Create enhanced item with status information
@@ -261,7 +277,7 @@ def export_maintenance_schedule(vehicle_id):
         service_records = ServiceRecord.get_service_records_by_vehicle(vehicle_id)
         
         current_mileage = vehicle.get('current_mileage', 0)
-        purchase_mileage = vehicle.get('purchase_mileage', 0)
+        initial_mileage = vehicle.get('initial_mileage', 0)
         
         # Create CSV content
         output = io.StringIO()
@@ -291,7 +307,7 @@ def export_maintenance_schedule(vehicle_id):
                 last_service_mileage = last_service.get('mileage', 0)
                 last_service_date = last_service.get('date')
             else:
-                last_service_mileage = purchase_mileage
+                last_service_mileage = initial_mileage
                 last_service_date = None
             
             interval_km = item.get('interval_km', 0)

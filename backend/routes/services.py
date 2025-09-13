@@ -109,7 +109,7 @@ def add_service_record():
         
         # Update vehicle mileage if service mileage is higher
         if service_mileage > current_mileage:
-            Vehicle.update_vehicle(data['vehicle_id'], {'current_mileage': service_mileage})
+            Vehicle.update_mileage_from_service(data['vehicle_id'], service_mileage)
         
         return jsonify({
             'id': service_id, 

@@ -74,7 +74,7 @@ def clear_database_data(db):
     
     collections_to_clear = [
         'users', 'vehicles', 'maintenance_items', 
-        'service_records', 'fillups', 'refresh_tokens'
+        'service_records', 'fill_ups', 'refresh_tokens'
     ]
     
     for collection_name in collections_to_clear:
